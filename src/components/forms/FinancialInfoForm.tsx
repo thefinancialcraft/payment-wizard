@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { DollarSign, Percent, Calculator, Clock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { DollarSign, Percent, Calculator, Clock, IndianRupee } from 'lucide-react';
 
 interface FormData {
   premium: string;
@@ -19,6 +20,8 @@ interface FinancialInfoFormProps {
 }
 
 export function FinancialInfoForm({ data, updateData }: FinancialInfoFormProps) {
+  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
+
   const handleChange = (field: keyof FormData, value: string) => {
     updateData({ [field]: value });
   };
@@ -28,15 +31,37 @@ export function FinancialInfoForm({ data, updateData }: FinancialInfoFormProps) 
     "15 Years", "20 Years", "25 Years", "30 Years"
   ];
 
+  // Auto-calculate net premium from base premium (divide by 1.18)
+  React.useEffect(() => {
+    if (data.premium) {
+      const baseAmount = parseFloat(data.premium) || 0;
+      const netAmount = baseAmount / 1.18;
+      updateData({ netPremium: netAmount.toFixed(2) });
+    }
+  }, [data.premium]);
+
   // Auto-calculate updated premium when discount is applied
   React.useEffect(() => {
     if (data.netPremium && data.discountOffer) {
       const netAmount = parseFloat(data.netPremium) || 0;
-      const discount = parseFloat(data.discountOffer) || 0;
-      const updated = netAmount - (netAmount * discount / 100);
-      updateData({ updatedPremium: updated.toFixed(2) });
+      const discountValue = parseFloat(data.discountOffer) || 0;
+      let updatedAmount = netAmount;
+
+      if (discountType === 'percentage') {
+        // Calculate discount: discount% of net premium, multiply by 5, subtract from net
+        const discountAmount = (netAmount * discountValue / 100) * 5;
+        updatedAmount = netAmount - discountAmount;
+      } else {
+        // Fixed amount: multiply by 5 and subtract from net premium
+        const discountAmount = discountValue * 5;
+        updatedAmount = netAmount - discountAmount;
+      }
+
+      updateData({ updatedPremium: Math.max(0, updatedAmount).toFixed(2) });
+    } else if (data.netPremium && !data.discountOffer) {
+      updateData({ updatedPremium: data.netPremium });
     }
-  }, [data.netPremium, data.discountOffer]);
+  }, [data.netPremium, data.discountOffer, discountType]);
 
   return (
     <div className="space-y-6 animate-slide-in">
@@ -48,7 +73,7 @@ export function FinancialInfoForm({ data, updateData }: FinancialInfoFormProps) 
                 <DollarSign className="w-4 h-4 text-primary" />
               </div>
               <Label htmlFor="premium" className="text-sm font-medium">
-                Base Premium *
+                Base Premium * (₹)
               </Label>
             </div>
             <Input
@@ -69,16 +94,16 @@ export function FinancialInfoForm({ data, updateData }: FinancialInfoFormProps) 
                 <Calculator className="w-4 h-4 text-success" />
               </div>
               <Label htmlFor="netPremium" className="text-sm font-medium">
-                Net Premium *
+                Net Premium (Auto-calculated)
               </Label>
             </div>
             <Input
               id="netPremium"
               type="number"
-              placeholder="Enter net premium amount"
+              placeholder="Auto-calculated from base premium"
               value={data.netPremium}
-              onChange={(e) => handleChange('netPremium', e.target.value)}
-              className="border-border/20 focus:border-primary transition-colors"
+              readOnly
+              className="border-border/20 bg-muted/50 cursor-not-allowed"
             />
           </CardContent>
         </Card>
@@ -90,20 +115,43 @@ export function FinancialInfoForm({ data, updateData }: FinancialInfoFormProps) 
                 <Percent className="w-4 h-4 text-warning" />
               </div>
               <Label htmlFor="discountOffer" className="text-sm font-medium">
-                Discount Offer (%)
+                Discount Offer
               </Label>
             </div>
-            <Input
-              id="discountOffer"
-              type="number"
-              placeholder="Enter discount percentage"
-              value={data.discountOffer}
-              onChange={(e) => handleChange('discountOffer', e.target.value)}
-              className="border-border/20 focus:border-primary transition-colors"
-              min="0"
-              max="100"
-              step="0.1"
-            />
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={discountType === 'percentage' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setDiscountType('percentage')}
+                  className="flex items-center gap-1"
+                >
+                  <Percent className="w-3 h-3" />
+                  %
+                </Button>
+                <Button
+                  type="button"
+                  variant={discountType === 'fixed' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setDiscountType('fixed')}
+                  className="flex items-center gap-1"
+                >
+                  <IndianRupee className="w-3 h-3" />
+                  ₹
+                </Button>
+              </div>
+              <Input
+                id="discountOffer"
+                type="number"
+                placeholder={discountType === 'percentage' ? 'Enter discount %' : 'Enter discount amount ₹'}
+                value={data.discountOffer}
+                onChange={(e) => handleChange('discountOffer', e.target.value)}
+                className="border-border/20 focus:border-primary transition-colors"
+                min="0"
+                step="0.1"
+              />
+            </div>
           </CardContent>
         </Card>
 
@@ -161,8 +209,8 @@ export function FinancialInfoForm({ data, updateData }: FinancialInfoFormProps) 
             <p className="text-sm font-medium text-info-foreground mb-1">Premium Calculation Summary:</p>
             <div className="text-xs text-info-foreground/80 space-y-1">
               <div>Base Premium: ₹{data.premium || '0'}</div>
-              <div>Net Premium: ₹{data.netPremium || '0'}</div>
-              <div>Discount: {data.discountOffer || '0'}%</div>
+              <div>Net Premium: ₹{data.netPremium || '0'} (Base ÷ 1.18)</div>
+              <div>Discount: {data.discountOffer || '0'}{discountType === 'percentage' ? '% × 5' : ' × 5'}</div>
               <div className="font-medium">Final Amount: ₹{data.updatedPremium || '0'}</div>
             </div>
           </div>

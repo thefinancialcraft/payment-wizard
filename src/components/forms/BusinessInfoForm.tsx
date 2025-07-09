@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { Building, Users, UserCheck, FileText, Briefcase, HeartHandshake } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Building, Users, UserCheck, FileText, Briefcase, HeartHandshake, Upload, Hash } from 'lucide-react';
 
 interface FormData {
   employeeName: string;
@@ -13,6 +14,9 @@ interface FormData {
   businessType: string;
   assistantTeam: string;
   relationshipManager: string;
+  proposalNo: string;
+  paymentProof: string;
+  paymentProofType: 'file' | 'details';
 }
 
 interface BusinessInfoFormProps {
@@ -21,8 +25,26 @@ interface BusinessInfoFormProps {
 }
 
 export function BusinessInfoForm({ data, updateData }: BusinessInfoFormProps) {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
   const handleChange = (field: keyof FormData, value: string) => {
     updateData({ [field]: value });
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      handleChange('paymentProof', file.name);
+    }
+  };
+
+  const handlePaymentProofTypeChange = (type: 'file' | 'details') => {
+    handleChange('paymentProofType', type);
+    if (type === 'details') {
+      setSelectedFile(null);
+    }
+    handleChange('paymentProof', '');
   };
 
   const businessTypes = [
@@ -173,7 +195,7 @@ export function BusinessInfoForm({ data, updateData }: BusinessInfoFormProps) {
           </CardContent>
         </Card>
 
-        <Card className="md:col-span-2 bg-gradient-secondary border-border/20 hover:shadow-card transition-all duration-300">
+        <Card className="bg-gradient-secondary border-border/20 hover:shadow-card transition-all duration-300">
           <CardContent className="p-4">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
@@ -190,6 +212,84 @@ export function BusinessInfoForm({ data, updateData }: BusinessInfoFormProps) {
               onChange={(e) => handleChange('relationshipManager', e.target.value)}
               className="border-border/20 focus:border-primary transition-colors"
             />
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-secondary border-border/20 hover:shadow-card transition-all duration-300">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-full bg-info/20 flex items-center justify-center">
+                <Hash className="w-4 h-4 text-info" />
+              </div>
+              <Label htmlFor="proposalNo" className="text-sm font-medium">
+                Proposal No. *
+              </Label>
+            </div>
+            <Input
+              id="proposalNo"
+              placeholder="Enter proposal number"
+              value={data.proposalNo}
+              onChange={(e) => handleChange('proposalNo', e.target.value)}
+              className="border-border/20 focus:border-primary transition-colors"
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="md:col-span-2 bg-gradient-secondary border-border/20 hover:shadow-card transition-all duration-300">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-full bg-success/20 flex items-center justify-center">
+                <Upload className="w-4 h-4 text-success" />
+              </div>
+              <Label className="text-sm font-medium">
+                Payment Proof *
+              </Label>
+            </div>
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={data.paymentProofType === 'file' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handlePaymentProofTypeChange('file')}
+                  className="flex items-center gap-1"
+                >
+                  <Upload className="w-3 h-3" />
+                  Upload File
+                </Button>
+                <Button
+                  type="button"
+                  variant={data.paymentProofType === 'details' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handlePaymentProofTypeChange('details')}
+                  className="flex items-center gap-1"
+                >
+                  <FileText className="w-3 h-3" />
+                  Enter Details
+                </Button>
+              </div>
+              
+              {data.paymentProofType === 'file' ? (
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    onChange={handleFileUpload}
+                    className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                  />
+                  {selectedFile && (
+                    <p className="text-xs text-success">Selected: {selectedFile.name}</p>
+                  )}
+                </div>
+              ) : (
+                <Input
+                  placeholder="Enter UTR/Transaction ID or payment details"
+                  value={data.paymentProof}
+                  onChange={(e) => handleChange('paymentProof', e.target.value)}
+                  className="border-border/20 focus:border-primary transition-colors"
+                />
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { Shield, FileText, Heart, Building2 } from 'lucide-react';
+import { Shield, FileText, Heart, Building2, Edit } from 'lucide-react';
 
 interface FormData {
   insuranceCompany: string;
@@ -18,13 +18,31 @@ interface InsuranceDetailsFormProps {
 }
 
 export function InsuranceDetailsForm({ data, updateData }: InsuranceDetailsFormProps) {
+  const [customCompany, setCustomCompany] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+
   const handleChange = (field: keyof FormData, value: string) => {
     updateData({ [field]: value });
   };
 
+  const handleCompanyChange = (value: string) => {
+    if (value === 'edit-company') {
+      setShowCustomInput(true);
+      setCustomCompany(data.insuranceCompany);
+    } else {
+      setShowCustomInput(false);
+      handleChange('insuranceCompany', value);
+    }
+  };
+
+  const handleCustomCompanyChange = (value: string) => {
+    setCustomCompany(value);
+    handleChange('insuranceCompany', value);
+  };
+
   const insuranceCompanies = [
     "LIC", "HDFC Life", "ICICI Prudential", "SBI Life", "Bajaj Allianz", 
-    "Max Life", "Tata AIG", "Star Health", "Religare", "Other"
+    "Max Life", "Tata AIG", "Star Health", "Religare", "edit-company"
   ];
 
   const policyTypes = [
@@ -45,18 +63,44 @@ export function InsuranceDetailsForm({ data, updateData }: InsuranceDetailsFormP
                 Insurance Company *
               </Label>
             </div>
-            <Select value={data.insuranceCompany} onValueChange={(value) => handleChange('insuranceCompany', value)}>
-              <SelectTrigger className="border-border/20 focus:border-primary">
-                <SelectValue placeholder="Select insurance company" />
-              </SelectTrigger>
-              <SelectContent>
-                {insuranceCompanies.map((company) => (
-                  <SelectItem key={company} value={company}>
-                    {company}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {showCustomInput ? (
+              <div className="space-y-2">
+                <Input
+                  placeholder="Enter insurance company name"
+                  value={customCompany}
+                  onChange={(e) => handleCustomCompanyChange(e.target.value)}
+                  className="border-border/20 focus:border-primary transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => {setShowCustomInput(false); setCustomCompany('');}}
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                >
+                  <Edit className="w-3 h-3" />
+                  Choose from list instead
+                </button>
+              </div>
+            ) : (
+              <Select value={data.insuranceCompany} onValueChange={handleCompanyChange}>
+                <SelectTrigger className="border-border/20 focus:border-primary">
+                  <SelectValue placeholder="Select insurance company" />
+                </SelectTrigger>
+                <SelectContent>
+                  {insuranceCompanies.map((company) => (
+                    <SelectItem key={company} value={company}>
+                      {company === 'edit-company' ? (
+                        <div className="flex items-center gap-2">
+                          <Edit className="w-4 h-4" />
+                          Edit Company
+                        </div>
+                      ) : (
+                        company
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </CardContent>
         </Card>
 

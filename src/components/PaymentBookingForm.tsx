@@ -54,6 +54,9 @@ interface FormData {
   businessType: string;
   assistantTeam: string;
   relationshipManager: string;
+  proposalNo: string;
+  paymentProof: string;
+  paymentProofType: 'file' | 'details';
 }
 
 const steps = [
@@ -115,7 +118,10 @@ export function PaymentBookingForm() {
     applicationNo: '',
     businessType: '',
     assistantTeam: '',
-    relationshipManager: ''
+    relationshipManager: '',
+    proposalNo: '',
+    paymentProof: '',
+    paymentProofType: 'file'
   });
   const { toast } = useToast();
 

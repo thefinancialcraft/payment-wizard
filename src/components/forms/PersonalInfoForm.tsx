@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { User, Phone, Mail, Users } from 'lucide-react';
 
@@ -17,8 +18,45 @@ interface PersonalInfoFormProps {
 }
 
 export function PersonalInfoForm({ data, updateData }: PersonalInfoFormProps) {
+  const [emailError, setEmailError] = useState('');
+  const [contactError, setContactError] = useState('');
+
   const handleChange = (field: keyof FormData, value: string) => {
     updateData({ [field]: value });
+  };
+
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setEmailError('Please enter a valid email address');
+      return false;
+    }
+    setEmailError('');
+    return true;
+  };
+
+  const validateContact = (contact: string) => {
+    const contactRegex = /^\d{10}$/;
+    if (!contactRegex.test(contact)) {
+      setContactError('Contact number must be exactly 10 digits');
+      return false;
+    }
+    setContactError('');
+    return true;
+  };
+
+  const handleEmailChange = (value: string) => {
+    handleChange('email', value);
+    if (value) validateEmail(value);
+  };
+
+  const handleContactChange = (value: string) => {
+    // Remove any non-numeric characters
+    const numericValue = value.replace(/\D/g, '');
+    if (numericValue.length <= 10) {
+      handleChange('contactNo', numericValue);
+      if (numericValue) validateContact(numericValue);
+    }
   };
 
   return (
@@ -56,11 +94,15 @@ export function PersonalInfoForm({ data, updateData }: PersonalInfoFormProps) {
             </div>
             <Input
               id="contactNo"
-              placeholder="Enter phone number"
+              placeholder="Enter 10-digit phone number"
               value={data.contactNo}
-              onChange={(e) => handleChange('contactNo', e.target.value)}
-              className="border-border/20 focus:border-primary transition-colors"
+              onChange={(e) => handleContactChange(e.target.value)}
+              className={`border-border/20 focus:border-primary transition-colors ${contactError ? 'border-destructive' : ''}`}
+              maxLength={10}
             />
+            {contactError && (
+              <p className="text-xs text-destructive mt-1">{contactError}</p>
+            )}
           </CardContent>
         </Card>
 
@@ -77,11 +119,14 @@ export function PersonalInfoForm({ data, updateData }: PersonalInfoFormProps) {
             <Input
               id="email"
               type="email"
-              placeholder="Enter email address"
+              placeholder="Enter email address (e.g., abc@domain.com)"
               value={data.email}
-              onChange={(e) => handleChange('email', e.target.value)}
-              className="border-border/20 focus:border-primary transition-colors"
+              onChange={(e) => handleEmailChange(e.target.value)}
+              className={`border-border/20 focus:border-primary transition-colors ${emailError ? 'border-destructive' : ''}`}
             />
+            {emailError && (
+              <p className="text-xs text-destructive mt-1">{emailError}</p>
+            )}
           </CardContent>
         </Card>
 
@@ -95,14 +140,18 @@ export function PersonalInfoForm({ data, updateData }: PersonalInfoFormProps) {
                 Number of Members
               </Label>
             </div>
-            <Input
-              id="numberOfMembers"
-              type="number"
-              placeholder="Enter number of members"
-              value={data.numberOfMembers}
-              onChange={(e) => handleChange('numberOfMembers', e.target.value)}
-              className="border-border/20 focus:border-primary transition-colors"
-            />
+            <Select value={data.numberOfMembers} onValueChange={(value) => handleChange('numberOfMembers', value)}>
+              <SelectTrigger className="border-border/20 focus:border-primary">
+                <SelectValue placeholder="Select number of members" />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => (
+                  <SelectItem key={num} value={num.toString()}>
+                    {num} {num === 1 ? 'Member' : 'Members'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </CardContent>
         </Card>
       </div>
