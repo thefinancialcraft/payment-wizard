@@ -139,7 +139,7 @@ export function PersonalInfoForm({ data, updateData, disabledFields = [], locati
 
     // Check if location already fetched
     if (locationFetched && locationDetails) {
-      console.log('Location already fetched, skipping API call');
+      console.log('🔄 Location already fetched, skipping API call');
       return;
     }
 
@@ -147,20 +147,64 @@ export function PersonalInfoForm({ data, updateData, disabledFields = [], locati
     setLocationDetails(null);
 
     try {
+      console.log('🔍 Checking cache for pincode:', data.pincode);
+      
+      // First check if pincode exists in find_pincode table
+      const { data: cachedData, error: cacheError } = await supabase
+        .from('find_pincode')
+        .select('*')
+        .eq('pincode', data.pincode)
+        .single();
+
+      if (cachedData && !cacheError) {
+        console.log('✅ CACHE HIT: Found data in database for pincode:', data.pincode);
+        console.log('📦 Cached data:', {
+          city: cachedData.city,
+          district: cachedData.district,
+          state: cachedData.state,
+          country: cachedData.country
+        });
+        
+        const locationData = {
+          city: cachedData.city || 'N/A',
+          district: cachedData.district || 'N/A',
+          state: cachedData.state || 'N/A',
+          country: cachedData.country || 'India'
+        };
+
+        setLocationDetails(locationData);
+        setLocationFetched(true);
+
+        // Update form data with location details
+        updateData({
+          city: locationData.city,
+          district: locationData.district,
+          state: locationData.state,
+          country: locationData.country
+        });
+
+        setIsLoadingLocation(false);
+        return;
+      }
+
+      // If not found in cache, fetch from API
+      console.log('❌ CACHE MISS: Pincode not found in cache, fetching from API');
+      
       // Use environment variable for API key
       const MAPPLS_API_KEY = import.meta.env.VITE_MAPPLS_API_KEY || 'YOUR_MAPPLS_API_KEY';
 
-      console.log('API Key:', MAPPLS_API_KEY);
-      console.log('Pincode:', data.pincode);
+      console.log('🔑 API Key configured:', MAPPLS_API_KEY !== 'YOUR_MAPPLS_API_KEY');
+      console.log('📍 Pincode:', data.pincode);
 
       if (MAPPLS_API_KEY === 'YOUR_MAPPLS_API_KEY') {
-        console.error('Please set VITE_MAPPLS_API_KEY in your .env file');
+        console.error('❌ Please set VITE_MAPPLS_API_KEY in your .env file');
         setIsLoadingLocation(false);
         return;
       }
 
       let responseData;
       if (import.meta.env.DEV) {
+        console.log('🌐 Using Development: Vite proxy');
         // Development: Use Vite proxy
         const url = "/api/search/address/geocode";
         const params = new URLSearchParams({
@@ -176,6 +220,7 @@ export function PersonalInfoForm({ data, updateData, disabledFields = [], locati
         });
         responseData = await response.json();
       } else {
+        console.log('🌐 Using Production: Supabase Edge Function');
         // Production: Use Supabase Edge Function
         const { data: supabaseData, error } = await supabase.functions.invoke('geocode', {
           body: {
@@ -191,7 +236,7 @@ export function PersonalInfoForm({ data, updateData, disabledFields = [], locati
         responseData = supabaseData;
       }
 
-      console.log('Response data:', responseData);
+      console.log('📡 API Response received:', responseData);
 
       const cop = responseData.copResults;
 
@@ -211,6 +256,27 @@ export function PersonalInfoForm({ data, updateData, disabledFields = [], locati
         locationData.country = 'India';
       }
 
+      console.log('🏠 Location data from API:', locationData);
+
+      // Store the new pincode data in find_pincode table
+      console.log('💾 Caching pincode data in database...');
+      const { error: insertError } = await supabase
+        .from('find_pincode')
+        .insert({
+          pincode: data.pincode,
+          city: locationData.city,
+          district: locationData.district,
+          state: locationData.state,
+          country: locationData.country
+        });
+
+      if (insertError) {
+        console.error('❌ Error caching pincode data:', insertError);
+        // Don't fail the whole process if caching fails
+      } else {
+        console.log('✅ Successfully cached pincode data for:', data.pincode);
+      }
+
       setLocationDetails(locationData);
       setLocationFetched(true); // Mark as fetched
 
@@ -223,7 +289,7 @@ export function PersonalInfoForm({ data, updateData, disabledFields = [], locati
       });
 
     } catch (error) {
-      console.error('Error fetching location:', error);
+      console.error('❌ Error fetching location:', error);
       alert('Error: No data found for this pincode. Please enter a valid 6-digit pincode.');
     } finally {
       setIsLoadingLocation(false);

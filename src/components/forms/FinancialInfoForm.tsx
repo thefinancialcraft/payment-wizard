@@ -27,11 +27,11 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
   const handleChange = (field: keyof FormData, value: string) => {
     updateData({ [field]: value });
 
-    // Clear discount offer when discount type is "None"
-    if (field === 'discountOfferType' && value === 'None') {
-      updateData({ discountOffer: '' });
+    // Set discount offer to 0 when discount type is "none"
+    if (field === 'discountOfferType' && (value === 'None' || value === 'none')) {
+      updateData({ discountOffer: '0' });
       setDiscountType('none');
-    } else if (field === 'discountOfferType' && value !== 'None') {
+    } else if (field === 'discountOfferType' && value !== 'None' && value !== 'none') {
       setDiscountType('percentage');
     }
   };
@@ -75,7 +75,7 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
       }
 
       // Apply discount if available
-      if (data.discountOffer && discountType !== 'none' && data.discountOfferType !== 'None') {
+      if (data.discountOffer && discountType !== 'none' && data.discountOfferType !== 'None' && data.discountOfferType !== 'none') {
         const discountValue = parseFloat(data.discountOffer) || 0;
         let discountAmount = 0;
 
@@ -180,14 +180,14 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
                 Discount Type
               </Label>
             </div>
-            <Select value={data.discountOfferType} onValueChange={(value) => handleChange('discountOfferType', value)}>
+            <Select value={data.discountOfferType || 'none'} onValueChange={(value) => handleChange('discountOfferType', value)}>
               <SelectTrigger className="border-border/20 focus:border-primary" style={{ background: 'transparent' }}>
                 <SelectValue placeholder="Select discount type" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="none">None</SelectItem>
                 <SelectItem value="Instant PayU">Instant PayU</SelectItem>
                 <SelectItem value="Cashback">Cashback</SelectItem>
-                <SelectItem value="None">None</SelectItem>
               </SelectContent>
             </Select>
           </CardContent>
@@ -231,8 +231,8 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
                   size="sm"
                   onClick={() => {
                     setDiscountType('none');
-                    handleChange('discountOffer', '');
-                    handleChange('discountOfferType', 'None');
+                    handleChange('discountOffer', '0');
+                    handleChange('discountOfferType', 'none');
                   }}
                   className="flex items-center gap-1"
                 >

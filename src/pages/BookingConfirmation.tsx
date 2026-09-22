@@ -1,11 +1,12 @@
 'use client';
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { ConfirmationDialog } from '@/components/ConfirmationDialog';
 import { useToast } from '@/hooks/use-toast';
 import { TwinklingStars } from '@/components/TwinklingStars';
 import { MeteorShower } from '@/components/MeteorShower';
 import { supabase } from '@/lib/supabase';
+import { clearSession, createSession } from '@/lib/sessionManager';
 
 interface FormData {
   policyHolderName: string;
@@ -49,12 +50,14 @@ interface FormData {
 export default function BookingConfirmation() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { bookingId } = useParams<{ bookingId: string }>();
   const { toast } = useToast();
   const [formData, setFormData] = useState<FormData | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [bookingId, setBookingId] = useState('');
+  const [currentBookingId, setCurrentBookingId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Generate 8-digit alphanumeric ID
   const generateBookingId = () => {
@@ -86,17 +89,98 @@ export default function BookingConfirmation() {
   };
 
   useEffect(() => {
-    // Get form data from location state
-    if (location.state?.formData) {
+    // Check if we have a booking ID in the URL
+    if (bookingId) {
+      setCurrentBookingId(bookingId);
+      fetchBookingData(bookingId);
+    } else if (location.state?.formData) {
+      // Get form data from location state (normal flow)
       setFormData(location.state.formData);
     } else {
-      // If no state, redirect back to form
+      // If no state or booking ID, redirect back to form
       navigate('/');
     }
-  }, [location.state, navigate]);
+  }, [bookingId, location.state, navigate]);
+
+  const fetchBookingData = async (id: string) => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('payment_bookings')
+        .select('*')
+        .eq('booking_code', id)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        // Map database fields to form data structure
+        const mappedFormData: FormData = {
+          policyHolderName: data.policy_holder_name || '',
+          contactNo: data.contact_no || '',
+          email: data.email || '',
+          numberOfMembers: data.number_of_members || '',
+          pincode: data.pincode || '',
+          city: data.city || '',
+          district: data.district || '',
+          state: data.state || '',
+          country: data.country || '',
+          paymentDate: data.payment_date || '',
+          month: data.month || '',
+          effectiveDate: data.effective_date || '',
+          nextRenewalDate: data.next_renewal_date || '',
+          paymentMonth: data.payment_month || '',
+          insuranceCompany: data.insurance_company || '',
+          planName: data.plan_name || '',
+          policyType: data.policy_type || '',
+          healthCheckup: data.health_checkup || '',
+          extraBonus: data.extra_bonus || '',
+          tenure: data.tenure || '',
+          premium: data.premium || '',
+          netPremium: data.net_premium || '',
+          discountOffer: data.discount_offer || '',
+          discountOfferType: data.discount_offer_type || '',
+          updatedPremium: data.updated_premium || '',
+          employeeName: data.employee_name || '',
+          team: data.team || '',
+          previousCompany: data.previous_company || '',
+          businessType: data.business_type || '',
+          assistantTeam: data.assistant_team || '',
+          relationshipManager: data.relationship_manager || '',
+          agentCode: data.agent_code || '',
+          proposalNo: data.proposal_no || '',
+          grade: data.grade || '',
+          leadSource: data.lead_source || '',
+          paymentProof: data.payment_proof || ''
+        };
+
+        setFormData(mappedFormData);
+        setCurrentBookingId(id);
+      }
+    } catch (error) {
+      console.error('Error fetching booking data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load booking data. Please check the booking ID.",
+        variant: "destructive",
+      });
+      navigate('/');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleConfirm = async () => {
     if (!formData) return;
+
+    // If we already have a booking ID from URL, we're just viewing, skip confirmation
+    if (currentBookingId) {
+      toast({
+        title: "Already Confirmed",
+        description: "This booking has already been confirmed.",
+      });
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -208,12 +292,11 @@ export default function BookingConfirmation() {
         // Don't fail the whole process if sync fails
       }
 
-      // Clear session storage
-      sessionStorage.removeItem('paymentBookingState');
-      sessionStorage.removeItem('paymentBookingTimestamp');
+      // Clear session storage using session manager
+      clearSession();
 
       // Set booking ID and show success modal
-      setBookingId(newBookingId);
+      setCurrentBookingId(newBookingId);
       setShowSuccessModal(true);
 
     } catch (error) {
@@ -246,7 +329,7 @@ export default function BookingConfirmation() {
         <div className="top-right-pattern"></div>
         <div className="bottom-left-pattern"></div>
         <div className="flex items-center justify-center min-h-screen p-4">
-          <p className="text-white">Loading...</p>
+          <p className="text-white">{isLoading ? 'Loading booking data...' : 'Loading...'}</p>
         </div>
       </div>
     );
@@ -260,7 +343,7 @@ export default function BookingConfirmation() {
       printWindow.document.write(`
         <html>
           <head>
-            <title>Booking Confirmation - ${bookingId}</title>
+            <title>Booking Confirmation - ${currentBookingId}</title>
             <style>
               @page {
                 size: A4;
@@ -348,7 +431,7 @@ export default function BookingConfirmation() {
             <div class="container">
               <div class="header">
                 <h1>Booking Confirmation</h1>
-                <div class="booking-id">Booking ID: ${bookingId}</div>
+                <div class="booking-id">Booking ID: ${currentBookingId}</div>
                 <div style="font-size: 12px; color: #666;">Date: ${new Date().toLocaleDateString()}</div>
               </div>
 
@@ -518,7 +601,7 @@ export default function BookingConfirmation() {
 
               <div class="footer">
                 <p>This is an automatically generated booking confirmation.</p>
-                <p>Booking URL: ${window.location.origin}/booking-confirmation/${bookingId}</p>
+                <p>Booking URL: ${window.location.origin}/booking-confirmation/${currentBookingId}</p>
               </div>
             </div>
           </body>
@@ -530,6 +613,9 @@ export default function BookingConfirmation() {
   };
 
   const handleCreateNew = () => {
+    // Clear current session and create a new one
+    clearSession();
+    createSession();
     navigate('/');
   };
 
@@ -590,26 +676,65 @@ export default function BookingConfirmation() {
             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-600 mb-2">Booking URL:</p>
               <p className="text-sm text-gray-900 break-all mb-4">
-                {window.location.origin}/booking-confirmation/{bookingId}
+                {window.location.origin}/booking-confirmation/{currentBookingId}
               </p>
               <p className="text-sm text-gray-600 mb-2">Booking ID:</p>
-              <p className="text-2xl font-bold text-purple-600">{bookingId}</p>
+              <p className="text-2xl font-bold text-purple-600">{currentBookingId}</p>
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-row gap-3 justify-center">
               <button
                 onClick={handlePrint}
                 disabled={isSubmitting}
-                className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-purple-700 transition-colors disabled:opacity-50"
+                className="bg-purple-600 text-white py-2 px-6 rounded-lg font-medium hover:bg-purple-700 transition-colors disabled:opacity-50"
               >
                 Print Confirmation
               </button>
               <button
                 onClick={handleCreateNew}
-                className="w-full bg-white text-purple-600 border-2 border-purple-600 py-3 px-4 rounded-lg font-medium hover:bg-purple-50 transition-colors"
+                className="bg-white text-purple-600 border-2 border-purple-600 py-2 px-6 rounded-lg font-medium hover:bg-purple-50 transition-colors"
               >
                 Create New Booking
               </button>
+            </div>
+          </div>
+        </div>
+      ) : currentBookingId ? (
+        // View-only mode when booking ID is present in URL
+        <div className="h-full p-4 relative z-10 overflow-y-auto custom-scrollbar">
+          <div className="flex items-center justify-center min-h-full">
+            <div className="bg-white border border-gray-200 rounded-lg p-8 shadow-lg max-w-4xl w-full">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Booking Confirmation</h2>
+                <p className="text-sm text-gray-600 mb-4">Booking ID: <span className="font-bold text-purple-600">{currentBookingId}</span></p>
+              </div>
+
+              <div className="mb-6">
+                <ConfirmationDialog
+                  formData={formData}
+                  agreedToTerms={true}
+                  onAgreeChange={() => {}}
+                  onConfirm={() => {}}
+                  onBack={() => {}}
+                  isSubmitting={false}
+                  viewOnly={true}
+                />
+              </div>
+
+              <div className="flex flex-row gap-3 justify-center">
+                <button
+                  onClick={handlePrint}
+                  className="bg-purple-600 text-white py-2 px-6 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+                >
+                  Print Confirmation
+                </button>
+                <button
+                  onClick={handleCreateNew}
+                  className="bg-white text-purple-600 border-2 border-purple-600 py-2 px-6 rounded-lg font-medium hover:bg-purple-50 transition-colors"
+                >
+                  Create New Booking
+                </button>
+              </div>
             </div>
           </div>
         </div>

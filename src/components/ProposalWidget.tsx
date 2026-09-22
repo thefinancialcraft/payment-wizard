@@ -18,12 +18,12 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
   const [proposalError, setProposalError] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Search proposals live from database when user types 9+ digits
+  // Search proposals live from database when user types 3+ characters
   const handleProposalInputChange = async (value: string) => {
     setProposalNo(value);
     setProposalError(''); // Clear error on input
 
-    if (value.length >= 9) {
+    if (value.length >= 3) {
       setIsLoadingFaveoData(true);
       try {
         const { data: records, error } = await supabase
@@ -31,14 +31,33 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
           .select('proposal_no, customer_name, payment_amount, proposal_status, no_of_lives, policy_start_date, plan, business_type, agent_name')
           .not('proposal_status', 'like', '%Mark for Cancellation Task%')
           .in('business_type', ['NEWBUSINESS', 'PORTABILITY'])
-          .ilike('proposal_no', `%${value}%`)
+          .or(`proposal_no.ilike.%${value}%,customer_name.ilike.%${value}%`)
           .order('proposal_no')
           .limit(10);
 
         if (error) throw error;
 
-        setFilteredProposals(records || []);
-        setShowProposalDropdown((records || []).length > 0);
+        // Check which proposals already exist in payment_bookings
+        const proposalNumbers = (records || []).map(r => r.proposal_no);
+        let existingProposals: string[] = [];
+        
+        if (proposalNumbers.length > 0) {
+          const { data: existingBookings } = await supabase
+            .from('payment_bookings')
+            .select('proposal_no')
+            .in('proposal_no', proposalNumbers);
+          
+          existingProposals = (existingBookings || []).map(b => b.proposal_no);
+        }
+
+        // Add existing flag to each proposal
+        const enrichedRecords = (records || []).map(record => ({
+          ...record,
+          alreadyBooked: existingProposals.includes(record.proposal_no)
+        }));
+
+        setFilteredProposals(enrichedRecords);
+        setShowProposalDropdown(enrichedRecords.length > 0);
       } catch (error) {
         console.error('Error searching proposals:', error);
         setFilteredProposals([]);
@@ -53,6 +72,12 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
   };
 
   const handleProposalSelect = (proposalData: any) => {
+    // Prevent selecting already booked proposals
+    if (proposalData.alreadyBooked) {
+      setProposalError('This proposal is already booked. Please select a different proposal.');
+      return;
+    }
+    
     setProposalNo(proposalData.proposal_no);
     setProposalError(''); // Clear error when selecting from dropdown
     setShowProposalDropdown(false);
@@ -70,6 +95,13 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
     if (proposalNo.trim()) {
       // Find the selected proposal data from filtered results
       const selectedProposal = filteredProposals.find(p => p.proposal_no.toLowerCase() === proposalNo.trim().toLowerCase());
+      
+      // Check if the selected proposal is already booked
+      if (selectedProposal?.alreadyBooked) {
+        setProposalError('This proposal is already booked. Please select a different proposal.');
+        return;
+      }
+      
       onSelect(selectedProposal || { proposalNo: proposalNo });
     }
   };
@@ -77,6 +109,8 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
   // Check if both conditions are met
   const shouldRequireProposal = businessType === 'In House' && insuranceCompany === 'Care Health Insurance';
   const isProposalValid = proposalNo.trim() && filteredProposals.some(p => p.proposal_no.toLowerCase() === proposalNo.trim().toLowerCase());
+  const selectedProposal = filteredProposals.find(p => p.proposal_no.toLowerCase() === proposalNo.trim().toLowerCase());
+  const isProposalAlreadyBooked = selectedProposal?.alreadyBooked;
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -216,13 +250,18 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
                         padding: '12px 16px',
                         cursor: 'pointer',
                         borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                        transition: 'background 0.2s ease'
+                        transition: 'background 0.2s ease',
+                        backgroundColor: item.alreadyBooked ? 'rgba(239, 68, 68, 0.2)' : 'transparent'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                        e.currentTarget.style.background = item.alreadyBooked 
+                          ? 'rgba(239, 68, 68, 0.3)' 
+                          : 'rgba(255, 255, 255, 0.1)';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.background = item.alreadyBooked 
+                          ? 'rgba(239, 68, 68, 0.2)' 
+                          : 'transparent';
                       }}
                     >
                       <div style={{
@@ -230,16 +269,34 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
                         flexDirection: 'column',
                         gap: '4px'
                       }}>
-                        <span style={{
-                          fontSize: '13px',
-                          fontWeight: '600',
-                          color: 'white'
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
                         }}>
-                          {item.proposal_no}
-                        </span>
+                          <span style={{
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            color: item.alreadyBooked ? '#fca5a5' : 'white'
+                          }}>
+                            {item.proposal_no}
+                          </span>
+                          {item.alreadyBooked && (
+                            <span style={{
+                              fontSize: '9px',
+                              backgroundColor: '#ef4444',
+                              color: 'white',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontWeight: '500'
+                            }}>
+                              Already Booked
+                            </span>
+                          )}
+                        </div>
                         <span style={{
                           fontSize: '11px',
-                          color: 'rgba(255, 255, 255, 0.6)'
+                          color: item.alreadyBooked ? 'rgba(252, 165, 165, 0.8)' : 'rgba(255, 255, 255, 0.6)'
                         }}>
                           {item.customer_name} - ₹{item.payment_amount}
                         </span>
@@ -272,6 +329,26 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
             </p>
           )}
 
+          {filteredProposals.some(p => p.alreadyBooked) && (
+            <div style={{
+              backgroundColor: 'rgba(239, 68, 68, 0.15)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: '6px',
+              padding: '8px 12px',
+              marginTop: '8px',
+              textAlign: 'center'
+            }}>
+              <p style={{
+                color: '#fca5a5',
+                fontSize: '11px',
+                fontWeight: '500',
+                margin: '0'
+              }}>
+                ⚠️ Some proposals are already present in database
+              </p>
+            </div>
+          )}
+
           <div style={{
             display: 'flex',
             gap: '16px',
@@ -293,21 +370,21 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
             </button>
             <button
               onClick={handleSubmit}
-              disabled={shouldRequireProposal ? (!isProposalValid || !!proposalError) : !proposalNo.trim()}
+              disabled={shouldRequireProposal ? (!isProposalValid || !!proposalError || isProposalAlreadyBooked) : !proposalNo.trim()}
               className="mirror-btn"
               style={{
                 padding: '10px 24px',
-                backgroundColor: (shouldRequireProposal ? (isProposalValid && !proposalError) : proposalNo.trim())
+                backgroundColor: (shouldRequireProposal ? (isProposalValid && !proposalError && !isProposalAlreadyBooked) : proposalNo.trim())
                   ? 'rgba(52, 187, 136, 0.15)'
                   : 'rgba(52, 187, 136, 0.05)',
                 color: '#34BB88',
                 border: '1px solid rgba(52, 187, 136, 0.3)',
                 borderRadius: '30px',
                 fontWeight: '500',
-                cursor: (shouldRequireProposal ? (isProposalValid && !proposalError) : proposalNo.trim()) ? 'pointer' : 'not-allowed',
+                cursor: (shouldRequireProposal ? (isProposalValid && !proposalError && !isProposalAlreadyBooked) : proposalNo.trim()) ? 'pointer' : 'not-allowed',
                 fontSize: '13px',
                 backdropFilter: 'blur(10px)',
-                opacity: (shouldRequireProposal ? (isProposalValid && !proposalError) : proposalNo.trim()) ? 1 : 0.5
+                opacity: (shouldRequireProposal ? (isProposalValid && !proposalError && !isProposalAlreadyBooked) : proposalNo.trim()) ? 1 : 0.5
               }}
             >
               Next

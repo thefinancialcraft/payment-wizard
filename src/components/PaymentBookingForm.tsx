@@ -15,6 +15,14 @@ import { BusinessTypeSelect } from './BusinessTypeSelect';
 import { InsuranceCompanySelect } from './InsuranceCompanySelect';
 import { ProposalWidget } from './ProposalWidget';
 import { supabase } from '@/lib/supabase';
+import { 
+  createSession, 
+  getSession, 
+  updateSession, 
+  clearSession, 
+  resetSession, 
+  hasSession 
+} from '@/lib/sessionManager';
 
 interface PaymentBookingFormProps {
   locationState?: any;
@@ -126,14 +134,28 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
     return !params.has('step') && !params.has('find');
   };
 
+  // Derive which find=proposal part to show initially from URL
+  const getInitialFindPart = () => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('find') === 'proposal') {
+      return params.get('part') || 'business-type';
+    }
+    return null;
+  };
+
+  const initialFindPart = getInitialFindPart();
+  const getInitialShowBusinessType = () => initialFindPart === 'business-type';
+  const getInitialShowCompany = () => initialFindPart === 'company';
+  const getInitialShowProposal = () => initialFindPart === 'proposal-no';
+
   const [currentStep, setCurrentStep] = useState(getInitialStep);
   const [showWelcome, setShowWelcome] = useState(getInitialShowWelcome);
   const [hideGreeting, setHideGreeting] = useState(false);
   const [showGreeting, setShowGreeting] = useState(false);
   const [showButtons, setShowButtons] = useState(false);
-  const [showBusinessTypeSelect, setShowBusinessTypeSelect] = useState(false);
-  const [showCompanySelect, setShowCompanySelect] = useState(false);
-  const [showProposalWidget, setShowProposalWidget] = useState(false);
+  const [showBusinessTypeSelect, setShowBusinessTypeSelect] = useState(getInitialShowBusinessType);
+  const [showCompanySelect, setShowCompanySelect] = useState(getInitialShowCompany);
+  const [showProposalWidget, setShowProposalWidget] = useState(getInitialShowProposal);
   const [disabledFields, setDisabledFields] = useState<string[]>([]);
   const [locationFetched, setLocationFetched] = useState(false);
 
@@ -160,14 +182,14 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
     tenure: '1 Year',
     premium: '',
     netPremium: '',
-    discountOffer: '',
+    discountOffer: '0',
     discountOfferType: 'none',
     updatedPremium: '',
     employeeName: '',
     team: '',
     previousCompany: '',
     businessType: '',
-    assistantTeam: '',
+    assistantTeam: 'None',
     relationshipManager: '',
     agentCode: '',
     proposalNo: '',
@@ -176,33 +198,37 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
     leadSource: ''
   });
 
-  // Handle URL parameter 'find' to show intermediate widgets
+  // Sync URL → state: when user navigates directly to a /?find=proposal&part=X URL
   useEffect(() => {
     const findParam = searchParams.get('find');
-    if (findParam === 'proposal') {
-      // Check which widget should be shown based on form data
-      if (!formData.businessType) {
-        setShowBusinessTypeSelect(true);
-        setShowWelcome(false);
-      } else if (!formData.insuranceCompany) {
-        setShowCompanySelect(true);
-        setShowWelcome(false);
-      } else if (formData.insuranceCompany === 'Care Health Insurance' && !formData.proposalNo) {
-        setShowProposalWidget(true);
-        setShowWelcome(false);
-      } else {
-        // If all data is present, go to first step
-        setCurrentStep(1);
-        setSearchParams({ step: 'insurer-information' });
-        setShowWelcome(false);
-      }
-    }
-  }, [searchParams, formData]);
+    const partParam = searchParams.get('part');
+    if (findParam !== 'proposal') return;
 
-  // Update URL when intermediate widgets are shown
+    setShowWelcome(false);
+
+    if (partParam === 'business-type') {
+      setShowBusinessTypeSelect(true);
+      setShowCompanySelect(false);
+      setShowProposalWidget(false);
+    } else if (partParam === 'company') {
+      setShowBusinessTypeSelect(false);
+      setShowCompanySelect(true);
+      setShowProposalWidget(false);
+    } else if (partParam === 'proposal-no') {
+      setShowBusinessTypeSelect(false);
+      setShowCompanySelect(false);
+      setShowProposalWidget(true);
+    }
+  }, [searchParams]);
+
+  // Sync state → URL: update URL when widget state changes
   useEffect(() => {
-    if (showBusinessTypeSelect || showCompanySelect || showProposalWidget) {
-      setSearchParams({ find: 'proposal' });
+    if (showBusinessTypeSelect) {
+      setSearchParams({ find: 'proposal', part: 'business-type' });
+    } else if (showCompanySelect) {
+      setSearchParams({ find: 'proposal', part: 'company' });
+    } else if (showProposalWidget) {
+      setSearchParams({ find: 'proposal', part: 'proposal-no' });
     }
   }, [showBusinessTypeSelect, showCompanySelect, showProposalWidget]);
 
@@ -237,7 +263,7 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
 
   const { toast } = useToast();
 
-  // Load complete state from session storage or location state on component mount
+  // Load complete state from session or location state on component mount
   useEffect(() => {
     // First check if returning from confirmation page
     if (locationState?.returnFromConfirmation && locationState?.formData) {
@@ -247,60 +273,78 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
       setShowBusinessTypeSelect(false);
       setShowCompanySelect(false);
       setShowProposalWidget(false);
+      // Create a new session for this resumed session
+      createSession(locationState.formData);
+      updateSession({
+        currentStep: 5,
+        showWelcome: false,
+        showBusinessTypeSelect: false,
+        showCompanySelect: false,
+        showProposalWidget: false,
+        formData: locationState.formData
+      });
       return;
     }
 
-    // Check if this is a fresh start after reset
-    const timestamp = sessionStorage.getItem('paymentBookingTimestamp');
-    if (timestamp) {
-      // Clear timestamp and don't load old state
-      sessionStorage.removeItem('paymentBookingTimestamp');
-      return;
-    }
-
-    // Otherwise load complete state from session storage
-    const savedState = sessionStorage.getItem('paymentBookingState');
-    if (savedState) {
-      try {
-        const parsedState = JSON.parse(savedState);
+    // Check if we have an existing session
+    if (hasSession()) {
+      const session = getSession();
+      if (session) {
         // Only load if the form has some actual data (not all empty)
-        const hasData = Object.values(parsedState.formData).some(value => value !== '' && value !== 'India');
+        const hasData = Object.values(session.formData).some(value => value !== '' && value !== 'India');
         if (hasData) {
-          setFormData(parsedState.formData);
-          setCurrentStep(parsedState.currentStep);
-          setShowWelcome(parsedState.showWelcome);
-          setHideGreeting(parsedState.hideGreeting);
-          setShowButtons(parsedState.showButtons);
-          setShowBusinessTypeSelect(parsedState.showBusinessTypeSelect);
-          setShowCompanySelect(parsedState.showCompanySelect);
-          setShowProposalWidget(parsedState.showProposalWidget);
-          setDisabledFields(parsedState.disabledFields || []);
+          setFormData(session.formData);
+          setCurrentStep(session.currentStep);
+          setShowWelcome(session.showWelcome);
+          setHideGreeting(session.hideGreeting);
+          setShowButtons(session.showButtons);
+          setShowBusinessTypeSelect(session.showBusinessTypeSelect);
+          setShowCompanySelect(session.showCompanySelect);
+          setShowProposalWidget(session.showProposalWidget);
+          setDisabledFields(session.disabledFields || []);
+
+          // Reset animation states when returning to welcome screen
+          if (session.showWelcome) {
+            setShowGreeting(false);
+            setShowButtons(false);
+          }
 
           // Set location cache status based on saved state
-          if (parsedState.locationFetched) {
+          if (session.locationFetched) {
             setLocationFetched(true);
           }
 
-          // Sync URL with current step or keep find-proposal for intermediate states
-          if (parsedState.showBusinessTypeSelect || parsedState.showCompanySelect || parsedState.showProposalWidget) {
-            setSearchParams({ find: 'proposal' });
-          } else if (parsedState.currentStepSlug) {
-            setSearchParams({ step: parsedState.currentStepSlug });
+          // Sync URL with current step or keep find=proposal&part=X for intermediate states
+          // Only set URL parameters if not on welcome screen
+          if (!session.showWelcome) {
+            if (session.showBusinessTypeSelect) {
+              setSearchParams({ find: 'proposal', part: 'business-type' });
+            } else if (session.showCompanySelect) {
+              setSearchParams({ find: 'proposal', part: 'company' });
+            } else if (session.showProposalWidget) {
+              setSearchParams({ find: 'proposal', part: 'proposal-no' });
+            } else if (session.currentStepSlug) {
+              setSearchParams({ step: session.currentStepSlug });
+            }
+          } else {
+            // Clear URL parameters when on welcome screen
+            setSearchParams({});
           }
         } else {
-          // Clear empty state
-          sessionStorage.removeItem('paymentBookingState');
+          // Clear empty session and create new one
+          clearSession();
+          createSession(formData);
         }
-      } catch (error) {
-        console.error('Error loading saved state:', error);
-        sessionStorage.removeItem('paymentBookingState');
       }
+    } else {
+      // Create new session if none exists
+      createSession(formData);
     }
   }, [locationState]);
 
-  // Save complete state to session storage whenever state changes
+  // Update session whenever state changes
   useEffect(() => {
-    const stateToSave = {
+    updateSession({
       formData,
       currentStep,
       currentStepSlug: steps[currentStep - 1]?.slug || '',
@@ -311,14 +355,25 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
       showCompanySelect,
       showProposalWidget,
       disabledFields,
-      locationFetched: formData.city !== '' && formData.district !== '' // Save location fetched status
-    };
-    sessionStorage.setItem('paymentBookingState', JSON.stringify(stateToSave));
-  }, [formData, currentStep, showWelcome, hideGreeting, showButtons, showBusinessTypeSelect, showCompanySelect, showProposalWidget, disabledFields, steps, searchParams]);
+      locationFetched: formData.city !== '' && formData.district !== ''
+    });
+  }, [formData, currentStep, showWelcome, hideGreeting, showButtons, showBusinessTypeSelect, showCompanySelect, showProposalWidget, disabledFields, steps]);
 
 
 
   useEffect(() => {
+    // Only run animation when transitioning to welcome screen
+    if (!showWelcome) {
+      // Reset animation states when leaving welcome screen
+      setShowGreeting(false);
+      setShowButtons(false);
+      return;
+    }
+
+    // Reset animation states when entering welcome screen
+    setShowGreeting(false);
+    setShowButtons(false);
+
     // Show greeting after 2 seconds to let background load first
     const showTimer = setTimeout(() => {
       if (showWelcome) {
@@ -326,12 +381,12 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
       }
     }, 2000);
 
-    // Show buttons after greeting animation completes (1.2s after greeting)
+    // Show buttons after greeting animation completes (2s after greeting for better visibility)
     const buttonsTimer = setTimeout(() => {
       if (showWelcome) {
         setShowButtons(true);
       }
-    }, 3200); // 2000ms (greeting) + 1200ms (animation)
+    }, 4000); // 2000ms (greeting) + 2000ms (extra delay for better separation)
 
     return () => {
       clearTimeout(showTimer);
@@ -348,19 +403,42 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
       const nextStepId = currentStep + 1;
       setCurrentStep(nextStepId);
       setSearchParams({ step: steps[nextStepId - 1].slug });
+      // Update session on step change
+      updateSession({
+        currentStep: nextStepId,
+        currentStepSlug: steps[nextStepId - 1].slug
+      });
     }
   };
 
   const startWizard = () => {
-    setHideGreeting(true);
+    // Create a new session when starting the wizard
+    resetSession(formData);
+    
+    // Update session to start wizard
+    updateSession({
+      showWelcome: false,
+      showBusinessTypeSelect: true,
+      hideGreeting: true,
+      showButtons: false
+    });
+    
+    // First hide buttons immediately
     setShowButtons(false);
+    
+    // After 0.8 seconds, hide greeting text
     setTimeout(() => {
-      setShowWelcome(false);
-      setShowBusinessTypeSelect(true);
-      setSearchParams({ find: 'proposal' });
-      if ((window as any).scrollToTop) {
-        (window as any).scrollToTop();
-      }
+      setHideGreeting(true);
+      
+      // After another 800ms, hide welcome screen and show business type select
+      setTimeout(() => {
+        setShowWelcome(false);
+        setShowBusinessTypeSelect(true);
+        setSearchParams({ find: 'proposal', part: 'business-type' });
+        if ((window as any).scrollToTop) {
+          (window as any).scrollToTop();
+        }
+      }, 800);
     }, 800);
   };
 
@@ -368,18 +446,44 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
     setFormData(prev => ({ ...prev, businessType }));
     setShowBusinessTypeSelect(false);
     setShowCompanySelect(true);
-    setSearchParams({ find: 'proposal' }); // Set find-proposal for intermediate steps
+    setSearchParams({ find: 'proposal', part: 'company' });
+    // Update session on business type selection
+    updateSession({
+      showBusinessTypeSelect: false,
+      showCompanySelect: true,
+      showWelcome: false,
+      formData: { ...formData, businessType }
+    });
   };
 
   const handleCompanySelect = (company: string) => {
     setFormData(prev => ({ ...prev, insuranceCompany: company }));
     setShowCompanySelect(false);
 
-    // Show proposal widget if Care Health Insurance is selected
+    // Show proposal widget only if Care Health Insurance is selected
     if (company === 'Care Health Insurance') {
       setShowProposalWidget(true);
+      setSearchParams({ find: 'proposal', part: 'proposal-no' });
+      // Update session
+      updateSession({
+        showCompanySelect: false,
+        showProposalWidget: true,
+        showWelcome: false,
+        formData: { ...formData, insuranceCompany: company }
+      });
+    } else {
+      // Non-Care company: go straight to step 1
+      setSearchParams({ step: 'insurer-information' });
+      // Update session
+      updateSession({
+        showCompanySelect: false,
+        showProposalWidget: false,
+        showWelcome: false,
+        currentStep: 1,
+        currentStepSlug: 'insurer-information',
+        formData: { ...formData, insuranceCompany: company }
+      });
     }
-    setSearchParams({ find: 'proposal' }); // Keep find-proposal for intermediate steps
   };
 
   const handleProposalSelect = async (proposalData: any) => {
@@ -467,37 +571,84 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
     if (proposalData.payment_amount) fieldsToDisable.push('premium');
     if (proposalData.agent_name) fieldsToDisable.push('relationshipManager');
 
-    setFormData(prev => ({ ...prev, ...updatedData }));
+    const finalFormData = { ...formData, ...updatedData };
+    setFormData(finalFormData);
     setDisabledFields(fieldsToDisable);
     setShowProposalWidget(false);
     setSearchParams({ step: 'insurer-information' }); // Set to first step when entering form
+    
+    // Update session on proposal selection
+    updateSession({
+      showProposalWidget: false,
+      showWelcome: false,
+      currentStep: 1,
+      currentStepSlug: 'insurer-information',
+      disabledFields: fieldsToDisable,
+      formData: finalFormData
+    });
   };
 
   const handleProposalCancel = () => {
     setShowProposalWidget(false);
     setFormData(prev => ({ ...prev, insuranceCompany: '' }));
     setShowCompanySelect(true);
-    setSearchParams({ find: 'proposal' }); // Keep find-proposal URL
+    setSearchParams({ find: 'proposal', part: 'company' });
   };
 
   const handleCompanySelectCancel = () => {
     setShowCompanySelect(false);
     setFormData(prev => ({ ...prev, insuranceCompany: '' }));
     setShowBusinessTypeSelect(true);
-    setSearchParams({ find: 'proposal' }); // Keep find-proposal URL
+    setSearchParams({ find: 'proposal', part: 'business-type' });
   };
 
   const handleBusinessTypeSelectCancel = () => {
+    // Reset session when going back to welcome from proposal flow
+    clearSession();
+    
+    const resetFormData = { ...formData, businessType: '' };
+    createSession(resetFormData);
+    
+    // Update session to show welcome screen with fresh animation state
+    updateSession({
+      showWelcome: true,
+      showBusinessTypeSelect: false,
+      showCompanySelect: false,
+      showProposalWidget: false,
+      hideGreeting: false,
+      showButtons: false,
+      formData: resetFormData
+    });
+    
     setShowBusinessTypeSelect(false);
-    setFormData(prev => ({ ...prev, businessType: '' }));
+    setFormData(resetFormData);
     setShowWelcome(true);
     setHideGreeting(false);
-    setShowButtons(true);
+    setShowButtons(false); // Start with buttons hidden to let animation run
     setSearchParams({}); // Clear URL parameter
   };
 
   const updateBooking = () => {
     // TODO: Implement update booking logic
+    // For now, show the same animation as startWizard
+    // First hide buttons immediately
+    setShowButtons(false);
+    
+    // After 0.8 seconds, hide greeting text
+    setTimeout(() => {
+      setHideGreeting(true);
+      
+      // After another 800ms, hide welcome screen and show business type select
+      setTimeout(() => {
+        setShowWelcome(false);
+        setShowBusinessTypeSelect(true);
+        setSearchParams({ find: 'proposal', part: 'business-type' });
+        if ((window as any).scrollToTop) {
+          (window as any).scrollToTop();
+        }
+      }, 800);
+    }, 800);
+    
     toast({
       title: "Update Booking",
       description: "Update booking feature will be implemented soon.",
@@ -509,17 +660,29 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
       const prevStepId = currentStep - 1;
       setCurrentStep(prevStepId);
       setSearchParams({ step: steps[prevStepId - 1].slug });
+      // Update session on step change
+      updateSession({
+        currentStep: prevStepId,
+        currentStepSlug: steps[prevStepId - 1].slug
+      });
     }
   };
 
   const handleStepClick = (stepId: number) => {
     setCurrentStep(stepId);
     setSearchParams({ step: steps[stepId - 1].slug });
+    // Update session on step change
+    updateSession({
+      currentStep: stepId,
+      currentStepSlug: steps[stepId - 1].slug
+    });
   };
 
   const handleReset = () => {
-    // Clear form data
-    setFormData({
+    // Clear the current session and create a new one
+    clearSession();
+    
+    const newFormData = {
       policyHolderName: '',
       contactNo: '',
       email: '',
@@ -542,27 +705,27 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
       tenure: '1 Year',
       premium: '',
       netPremium: '',
-      discountOffer: '',
+      discountOffer: '0',
       discountOfferType: 'none',
       updatedPremium: '',
       employeeName: '',
       team: '',
       previousCompany: '',
       businessType: '',
-      assistantTeam: '',
+      assistantTeam: 'None',
       relationshipManager: '',
       agentCode: '',
       proposalNo: '',
       paymentProof: '',
       grade: '',
       leadSource: ''
-    });
+    };
 
-    // Clear complete session storage (start new session)
-    sessionStorage.removeItem('paymentBookingState');
+    // Create new session with empty form data
+    createSession(newFormData);
 
-    // Force a fresh state by adding a timestamp to prevent reload issues
-    sessionStorage.setItem('paymentBookingTimestamp', Date.now().toString());
+    // Clear form data
+    setFormData(newFormData);
 
     // Reset UI state
     setCurrentStep(1);
@@ -582,6 +745,9 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
   };
 
   const handleSubmit = () => {
+    // Clear session on form submit
+    clearSession();
+    
     // Clear location cache on submit
     setLocationFetched(false);
     navigate('/booking-confirmation', { state: { formData } });

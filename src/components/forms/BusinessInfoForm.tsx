@@ -393,9 +393,9 @@ export function BusinessInfoForm({ data, updateData, paymentMonth, insuranceComp
 
 
   const teams = [
+    "None",
     "Saloni Soni",
-    "Tanya Bhardwaj",
-    "None"
+    "Tanya Bhardwaj"
   ];
 
   return (
@@ -582,7 +582,7 @@ export function BusinessInfoForm({ data, updateData, paymentMonth, insuranceComp
                 Assistant Team
               </Label>
             </div>
-            <Select value={data.assistantTeam} onValueChange={(value) => handleChange('assistantTeam', value)}>
+            <Select value={data.assistantTeam || 'None'} onValueChange={(value) => handleChange('assistantTeam', value)}>
               <SelectTrigger className="border-border/20 focus:border-primary">
                 <SelectValue placeholder="Select assistant team" />
               </SelectTrigger>
