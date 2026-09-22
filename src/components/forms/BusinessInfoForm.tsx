@@ -262,7 +262,7 @@ export function BusinessInfoForm({ data, updateData, paymentMonth, insuranceComp
           const { data: records, error } = await supabase
             .from('faveo_data')
             .select('proposal_no, customer_name, payment_amount, proposal_status')
-            .not('proposal_status', 'eq', 'Primary:Mark for Cancellation Task')
+            .not('proposal_status', 'like', '%Mark for Cancellation Task%')
             .order('proposal_no')
             .limit(50);
 

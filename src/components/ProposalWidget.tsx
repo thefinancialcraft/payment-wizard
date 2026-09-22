@@ -27,7 +27,7 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
         const { data: records, error } = await supabase
           .from('faveo_data')
           .select('proposal_no, customer_name, payment_amount, proposal_status, no_of_lives, policy_start_date, plan, business_type, agent_name')
-          .not('proposal_status', 'eq', 'Primary:Mark for Cancellation Task')
+          .not('proposal_status', 'like', '%Mark for Cancellation Task%')
           .in('business_type', ['NEWBUSINESS', 'PORTABILITY'])
           .order('proposal_no')
           .limit(50);
