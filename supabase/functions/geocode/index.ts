@@ -1,3 +1,4 @@
+// @ts-ignore - Deno runtime imports
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const corsHeaders = {
@@ -5,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -15,7 +16,7 @@ serve(async (req) => {
     console.log('Request method:', req.method)
     console.log('Request headers:', Object.fromEntries(req.headers))
 
-    let address, podFilter, access_token
+    let address: string | null, podFilter: string, access_token: string | null
 
     // Try to parse from body first
     try {
@@ -81,10 +82,11 @@ serve(async (req) => {
       }
     )
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Geocode error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return new Response(
-      JSON.stringify({ error: 'Internal server error', message: error.message }),
+      JSON.stringify({ error: 'Internal server error', message: errorMessage }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
