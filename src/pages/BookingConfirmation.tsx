@@ -149,64 +149,9 @@ export default function BookingConfirmation() {
         throw error;
       }
 
-      // Sync to Google Sheets directly via Google Apps Script
-      try {
-        const googleScriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
-
-        const syncResponse = await fetch(googleScriptUrl, {
-          method: 'POST',
-          mode: 'no-cors', // Required for Google Apps Script
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            booking_id: newBookingId,
-            policy_holder_name: formData.policyHolderName,
-            contact_no: formData.contactNo,
-            email: formData.email,
-            number_of_members: formData.numberOfMembers,
-            pincode: formData.pincode,
-            city: formData.city,
-            district: formData.district,
-            state: formData.state,
-            country: formData.country,
-            payment_date: formData.paymentDate, // Keep original format for Google Sheets
-            payment_month: formData.paymentMonth,
-            effective_date: formData.effectiveDate,
-            next_renewal_date: formData.nextRenewalDate,
-            month: formData.month,
-            insurance_company: formData.insuranceCompany,
-            plan_name: formData.planName,
-            policy_type: formData.policyType,
-            health_checkup: formData.healthCheckup,
-            extra_bonus: formData.extraBonus,
-            tenure: formData.tenure,
-            premium: formData.premium,
-            net_premium: formData.netPremium,
-            discount_offer: formData.discountOffer,
-            discount_offer_type: formData.discountOfferType,
-            updated_premium: formData.updatedPremium,
-            employee_name: formData.employeeName,
-            team: formData.team,
-            previous_company: formData.previousCompany,
-            business_type: formData.businessType,
-            assistant_team: formData.assistantTeam,
-            relationship_manager: formData.relationshipManager,
-            agent_code: formData.agentCode,
-            proposal_no: formData.proposalNo,
-            grade: formData.grade,
-            lead_source: formData.leadSource,
-            payment_proof: formData.paymentProof,
-            created_at: new Date().toISOString(),
-          })
-        });
-
-        // Note: With no-cors, we can't read the response, but the request will still be sent
-        console.log('Google Sheets sync request sent');
-      } catch (syncError) {
-        console.error('Error syncing to Google Sheets:', syncError);
-        // Don't fail the whole process if sync fails
-      }
+      // Google Sheets sync is now handled automatically via database trigger
+      // → Edge Function (sync-to-sheets) → Google Apps Script
+      // No need to call from frontend - improves app performance
 
       // Clear session storage
       sessionStorage.removeItem('paymentBookingState');
