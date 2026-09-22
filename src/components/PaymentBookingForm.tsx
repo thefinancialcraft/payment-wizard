@@ -110,8 +110,24 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
       slug: 'business-information'
     }
   ];
-  const [currentStep, setCurrentStep] = useState(1);
-  const [showWelcome, setShowWelcome] = useState(true);
+  // Derive initial state from URL so direct links like ?step=insurer-information
+  // skip the welcome screen immediately without any flash
+  const getInitialStep = () => {
+    const stepParam = new URLSearchParams(window.location.search).get('step');
+    if (stepParam) {
+      const found = steps.find(s => s.slug === stepParam);
+      if (found) return found.id;
+    }
+    return 1;
+  };
+  const getInitialShowWelcome = () => {
+    const params = new URLSearchParams(window.location.search);
+    // If URL has a step or find param, skip welcome
+    return !params.has('step') && !params.has('find');
+  };
+
+  const [currentStep, setCurrentStep] = useState(getInitialStep);
+  const [showWelcome, setShowWelcome] = useState(getInitialShowWelcome);
   const [hideGreeting, setHideGreeting] = useState(false);
   const [showGreeting, setShowGreeting] = useState(false);
   const [showButtons, setShowButtons] = useState(false);
@@ -197,18 +213,20 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
     }
   }, [currentStep]);
 
-  // Sync current step with URL parameter (only if not on welcome screen)
+  // Sync current step with URL parameter
   useEffect(() => {
-    if (!showWelcome) {
-      const stepParam = searchParams.get('step');
-      if (stepParam) {
-        const step = steps.find(s => s.slug === stepParam);
-        if (step && step.id !== currentStep) {
-          setCurrentStep(step.id);
-        }
+    const stepParam = searchParams.get('step');
+    if (stepParam) {
+      const step = steps.find(s => s.slug === stepParam);
+      if (step && step.id !== currentStep) {
+        setCurrentStep(step.id);
+      }
+      // If a step param exists, ensure welcome is hidden
+      if (showWelcome) {
+        setShowWelcome(false);
       }
     }
-  }, [searchParams, steps, showWelcome, currentStep]);
+  }, [searchParams, steps, currentStep, showWelcome]);
 
   // Clear URL parameter when showing welcome screen
   useEffect(() => {
