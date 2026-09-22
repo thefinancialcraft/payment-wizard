@@ -12,16 +12,18 @@ interface ProposalWidgetProps {
 
 export function ProposalWidget({ onSelect, onCancel, businessType, insuranceCompany }: ProposalWidgetProps) {
   const [proposalNo, setProposalNo] = useState('');
-  const [faveoData, setFaveoData] = useState<any[]>([]);
+  const [filteredProposals, setFilteredProposals] = useState<any[]>([]);
   const [isLoadingFaveoData, setIsLoadingFaveoData] = useState(false);
   const [showProposalDropdown, setShowProposalDropdown] = useState(false);
-  const [filteredProposals, setFilteredProposals] = useState<any[]>([]);
   const [proposalError, setProposalError] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Fetch faveo_data on mount
-  useEffect(() => {
-    const fetchFaveoData = async () => {
+  // Search proposals live from database when user types 9+ digits
+  const handleProposalInputChange = async (value: string) => {
+    setProposalNo(value);
+    setProposalError(''); // Clear error on input
+
+    if (value.length >= 9) {
       setIsLoadingFaveoData(true);
       try {
         const { data: records, error } = await supabase
@@ -29,44 +31,29 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
           .select('proposal_no, customer_name, payment_amount, proposal_status, no_of_lives, policy_start_date, plan, business_type, agent_name')
           .not('proposal_status', 'like', '%Mark for Cancellation Task%')
           .in('business_type', ['NEWBUSINESS', 'PORTABILITY'])
+          .ilike('proposal_no', `%${value}%`)
           .order('proposal_no')
-          .limit(50);
+          .limit(10);
 
         if (error) throw error;
 
-        setFaveoData(records || []);
         setFilteredProposals(records || []);
+        setShowProposalDropdown((records || []).length > 0);
       } catch (error) {
-        console.error('Error fetching faveo data:', error);
-        setFaveoData([]);
+        console.error('Error searching proposals:', error);
         setFilteredProposals([]);
+        setShowProposalDropdown(false);
       } finally {
         setIsLoadingFaveoData(false);
       }
-    };
-
-    fetchFaveoData();
-  }, []);
-
-  // Filter proposals based on user input
-  const handleProposalInputChange = (value: string) => {
-    setProposalNo(value);
-    setProposalError(''); // Clear error on input
-
-    if (value) {
-      const filtered = faveoData.filter(item =>
-        item.proposal_no.toLowerCase().includes(value.toLowerCase()) ||
-        item.customer_name?.toLowerCase().includes(value.toLowerCase())
-      );
-      setFilteredProposals(filtered);
-      setShowProposalDropdown(filtered.length > 0);
     } else {
+      setFilteredProposals([]);
       setShowProposalDropdown(false);
     }
   };
 
-  const handleProposalSelect = (proposalNo: string) => {
-    setProposalNo(proposalNo);
+  const handleProposalSelect = (proposalData: any) => {
+    setProposalNo(proposalData.proposal_no);
     setProposalError(''); // Clear error when selecting from dropdown
     setShowProposalDropdown(false);
   };
@@ -81,8 +68,8 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
     }
 
     if (proposalNo.trim()) {
-      // Find the selected proposal data
-      const selectedProposal = faveoData.find(p => p.proposal_no.toLowerCase() === proposalNo.trim().toLowerCase());
+      // Find the selected proposal data from filtered results
+      const selectedProposal = filteredProposals.find(p => p.proposal_no.toLowerCase() === proposalNo.trim().toLowerCase());
       onSelect(selectedProposal || { proposalNo: proposalNo });
     }
   };
@@ -224,7 +211,7 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
                   filteredProposals.map((item) => (
                     <div
                       key={item.proposal_no}
-                      onClick={() => handleProposalSelect(item.proposal_no)}
+                      onClick={() => handleProposalSelect(item)}
                       style={{
                         padding: '12px 16px',
                         cursor: 'pointer',
