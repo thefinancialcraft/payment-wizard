@@ -154,7 +154,7 @@ export function PersonalInfoForm({ data, updateData, disabledFields = [], locati
 
       const url = import.meta.env.DEV 
         ? "/api/search/address/geocode" 
-        : "https://search.mappls.com/search/address/geocode";
+        : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/geocode`;
       const params = new URLSearchParams({
         address: data.pincode,
         podFilter: "pincode",
@@ -167,6 +167,10 @@ export function PersonalInfoForm({ data, updateData, disabledFields = [], locati
         method: 'GET',
         headers: {
           'Accept': 'application/json',
+          ...(import.meta.env.DEV ? {} : {
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+          })
         },
       });
 
