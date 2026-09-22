@@ -151,7 +151,7 @@ export default function BookingConfirmation() {
 
       // Sync to Google Sheets directly via Google Apps Script
       try {
-        const googleScriptUrl = 'https://script.google.com/macros/s/AKfycbx1Ef6djSfs8Xfb_adXOEvEZQg2Lfb0DiPFVhuz5I5Y_yI1hujfaw2M0GekcMaqHAZR/exec';
+        const googleScriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
 
         const syncResponse = await fetch(googleScriptUrl, {
           method: 'POST',
