@@ -1,37 +1,99 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { Shield, FileText, Heart, Building2, Edit } from 'lucide-react';
+import { Shield, FileText, Heart, Building2, Edit, Gift, Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 interface FormData {
   insuranceCompany: string;
   planName: string;
   policyType: string;
   healthCheckup: string;
+  extraBonus: string;
 }
 
 interface InsuranceDetailsFormProps {
   data: FormData;
   updateData: (data: Partial<FormData>) => void;
+  disabledFields?: string[];
 }
 
-export function InsuranceDetailsForm({ data, updateData }: InsuranceDetailsFormProps) {
+export function InsuranceDetailsForm({ data, updateData, disabledFields = [] }: InsuranceDetailsFormProps) {
   const [customCompany, setCustomCompany] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customPlan, setCustomPlan] = useState('');
+  const [showCustomPlanInput, setShowCustomPlanInput] = useState(false);
+  const [insuranceCompanies, setInsuranceCompanies] = useState<string[]>([]);
+  const [companyPlans, setCompanyPlans] = useState<Record<string, string[]>>({});
+  const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(false);
+
+  // Fetch insurance companies and plans from database
+  useEffect(() => {
+    const fetchInsuranceData = async () => {
+      setIsLoadingCompanies(true);
+      setIsLoadingPlans(true);
+      try {
+        console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
+        console.log('Supabase Key exists:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
+        console.log('Fetching insurance data from database...');
+
+        const { data: records, error } = await supabase
+          .from('insurance_plans')
+          .select('insurance_company, plan_name')
+          .order('insurance_company, plan_name');
+
+        console.log('Supabase response:', { records, error });
+
+        if (error) throw error;
+
+        // Extract unique companies
+        const uniqueCompanies = Array.from(
+          new Set(records?.map((r: any) => r.insurance_company) || [])
+        );
+        console.log('Unique companies:', uniqueCompanies);
+        setInsuranceCompanies(uniqueCompanies);
+
+        // Group plans by company
+        const grouped: Record<string, string[]> = {};
+        records?.forEach((record: any) => {
+          const company = record.insurance_company;
+          const plan = record.plan_name;
+          if (!grouped[company]) {
+            grouped[company] = [];
+          }
+          grouped[company].push(plan);
+        });
+        console.log('Grouped plans:', grouped);
+        setCompanyPlans(grouped);
+      } catch (error) {
+        console.error('Error fetching insurance data:', error);
+      } finally {
+        setIsLoadingCompanies(false);
+        setIsLoadingPlans(false);
+      }
+    };
+
+    fetchInsuranceData();
+  }, []);
+
+
 
   const handleChange = (field: keyof FormData, value: string) => {
     updateData({ [field]: value });
   };
 
   const handleCompanyChange = (value: string) => {
-    if (value === 'edit-company') {
+    if (value === 'add-new') {
       setShowCustomInput(true);
-      setCustomCompany(data.insuranceCompany);
+      setCustomCompany('');
     } else {
       setShowCustomInput(false);
       handleChange('insuranceCompany', value);
+      // Clear plan name when company changes
+      handleChange('planName', '');
     }
   };
 
@@ -40,21 +102,92 @@ export function InsuranceDetailsForm({ data, updateData }: InsuranceDetailsFormP
     handleChange('insuranceCompany', value);
   };
 
-  const insuranceCompanies = [
-    "LIC", "HDFC Life", "ICICI Prudential", "SBI Life", "Bajaj Allianz", 
-    "Max Life", "Tata AIG", "Star Health", "Religare", "edit-company"
-  ];
+  const handleSaveCustomCompany = async () => {
+    if (customCompany.trim()) {
+      // Add new company to the list
+      setInsuranceCompanies([...insuranceCompanies, customCompany]);
+      // Initialize empty plans for new company
+      setCompanyPlans({
+        ...companyPlans,
+        [customCompany]: ['Default Plan']
+      });
+      handleChange('insuranceCompany', customCompany);
+      setShowCustomInput(false);
+      setCustomCompany('');
+
+      // Insert into database with a default plan name
+      try {
+        const { error } = await supabase
+          .from('insurance_plans')
+          .insert({
+            insurance_company: customCompany,
+            plan_name: 'Default Plan'
+          });
+
+        if (error) {
+          console.error('Error inserting company:', error);
+        }
+      } catch (error) {
+        console.error('Error inserting company:', error);
+      }
+    }
+  };
+
+  const handlePlanChange = (value: string) => {
+    if (value === 'add-new-plan') {
+      setShowCustomPlanInput(true);
+      setCustomPlan('');
+    } else {
+      setShowCustomPlanInput(false);
+      handleChange('planName', value);
+    }
+  };
+
+  const handleSaveCustomPlan = async () => {
+    if (customPlan.trim()) {
+      const currentCompany = data.insuranceCompany;
+      if (currentCompany) {
+        // Add new plan to the current company's plans locally
+        const updatedPlans = [...(companyPlans[currentCompany] || []), customPlan];
+        setCompanyPlans({
+          ...companyPlans,
+          [currentCompany]: updatedPlans
+        });
+        handleChange('planName', customPlan);
+
+        // Insert into database
+        try {
+          const { error } = await supabase
+            .from('insurance_plans')
+            .insert({
+              insurance_company: currentCompany,
+              plan_name: customPlan
+            });
+
+          if (error) {
+            console.error('Error inserting plan:', error);
+          }
+        } catch (error)
+        
+        {
+          console.error('Error inserting plan:', error);
+        }
+      }
+      setShowCustomPlanInput(false);
+      setCustomPlan('');
+    }
+  };
 
   const policyTypes = [
-    "Term Life", "Whole Life", "Endowment", "ULIP", "Health Insurance", 
-    "Motor Insurance", "Travel Insurance", "Home Insurance"
+    "NEWBUSINESS",
+    "PORTABILITY"
   ];
 
   return (
-    <div className="space-y-6 animate-slide-in">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="bg-gradient-secondary border-border/20 hover:shadow-card transition-all duration-300">
-          <CardContent className="p-4">
+    <div className="space-y-6 animate-slide-in" style={{ background: 'transparent' }}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6" style={{ background: 'transparent' }}>
+        <Card className="hover:shadow-card transition-all duration-300" style={{ background: 'transparent', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+          <CardContent className="p-4" style={{ background: 'transparent' }}>
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
                 <Building2 className="w-4 h-4 text-primary" />
@@ -66,46 +199,66 @@ export function InsuranceDetailsForm({ data, updateData }: InsuranceDetailsFormP
             {showCustomInput ? (
               <div className="space-y-2">
                 <Input
-                  placeholder="Enter insurance company name"
+                  placeholder="Enter new insurance company name"
                   value={customCompany}
                   onChange={(e) => handleCustomCompanyChange(e.target.value)}
                   className="border-border/20 focus:border-primary transition-colors"
                 />
-                <button
-                  type="button"
-                  onClick={() => {setShowCustomInput(false); setCustomCompany('');}}
-                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                >
-                  <Edit className="w-3 h-3" />
-                  Choose from list instead
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveCustomCompany}
+                    className="text-xs bg-primary text-primary-foreground px-3 py-1 rounded hover:bg-primary/90 transition-colors"
+                  >
+                    Add to list
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {setShowCustomInput(false); setCustomCompany('');}}
+                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             ) : (
-              <Select value={data.insuranceCompany} onValueChange={handleCompanyChange}>
-                <SelectTrigger className="border-border/20 focus:border-primary">
-                  <SelectValue placeholder="Select insurance company" />
-                </SelectTrigger>
-                <SelectContent>
-                  {insuranceCompanies.map((company) => (
-                    <SelectItem key={company} value={company}>
-                      {company === 'edit-company' ? (
+              <>
+                {isLoadingCompanies ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading companies...
+                  </div>
+                ) : (
+                  <Select
+                    value={data.insuranceCompany}
+                    onValueChange={handleCompanyChange}
+                    disabled={true}
+                  >
+                    <SelectTrigger className="border-border/20 focus:border-primary" style={{ opacity: 0.6 }}>
+                      <SelectValue placeholder="Select insurance company" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {insuranceCompanies.map((company) => (
+                        <SelectItem key={company} value={company}>
+                          {company}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="add-new" className="text-primary">
                         <div className="flex items-center gap-2">
                           <Edit className="w-4 h-4" />
-                          Edit Company
+                          Add new company
                         </div>
-                      ) : (
-                        company
-                      )}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-secondary border-border/20 hover:shadow-card transition-all duration-300">
-          <CardContent className="p-4">
+        <Card className="hover:shadow-card transition-all duration-300" style={{ background: 'transparent', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+          <CardContent className="p-4" style={{ background: 'transparent' }}>
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
                 <FileText className="w-4 h-4 text-primary" />
@@ -114,18 +267,77 @@ export function InsuranceDetailsForm({ data, updateData }: InsuranceDetailsFormP
                 Plan Name *
               </Label>
             </div>
-            <Input
-              id="planName"
-              placeholder="Enter plan name"
-              value={data.planName}
-              onChange={(e) => handleChange('planName', e.target.value)}
-              className="border-border/20 focus:border-primary transition-colors"
-            />
+            {showCustomPlanInput ? (
+              <div className="space-y-2">
+                <Input
+                  placeholder="Enter new plan name"
+                  value={customPlan}
+                  onChange={(e) => setCustomPlan(e.target.value)}
+                  className="border-border/20 focus:border-primary transition-colors"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveCustomPlan}
+                    className="text-xs bg-primary text-primary-foreground px-3 py-1 rounded hover:bg-primary/90 transition-colors"
+                  >
+                    Add to list
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {setShowCustomPlanInput(false); setCustomPlan('');}}
+                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : data.insuranceCompany ? (
+              <>
+                {isLoadingPlans ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading plans...
+                  </div>
+                ) : (
+                  <Select
+                    value={data.planName}
+                    onValueChange={handlePlanChange}
+                    disabled={disabledFields.includes('planName')}
+                  >
+                    <SelectTrigger className="border-border/20 focus:border-primary" style={{ opacity: disabledFields.includes('planName') ? 0.6 : 1 }}>
+                      <SelectValue placeholder="Select plan name" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {companyPlans[data.insuranceCompany]?.map((plan) => (
+                        <SelectItem key={plan} value={plan}>
+                          {plan}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="add-new-plan" className="text-primary">
+                        <div className="flex items-center gap-2">
+                          <Edit className="w-4 h-4" />
+                          Add new plan
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </>
+            ) : (
+              <Input
+                id="planName"
+                placeholder="Select insurance company first"
+                value={data.planName}
+                readOnly
+                className="border-border/20 bg-muted/50 cursor-not-allowed"
+              />
+            )}
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-secondary border-border/20 hover:shadow-card transition-all duration-300">
-          <CardContent className="p-4">
+        <Card className="hover:shadow-card transition-all duration-300" style={{ background: 'transparent', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+          <CardContent className="p-4" style={{ background: 'transparent' }}>
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
                 <Shield className="w-4 h-4 text-primary" />
@@ -134,8 +346,12 @@ export function InsuranceDetailsForm({ data, updateData }: InsuranceDetailsFormP
                 Policy Type *
               </Label>
             </div>
-            <Select value={data.policyType} onValueChange={(value) => handleChange('policyType', value)}>
-              <SelectTrigger className="border-border/20 focus:border-primary">
+            <Select
+              value={data.policyType}
+              onValueChange={(value) => handleChange('policyType', value)}
+              disabled={disabledFields.includes('policyType')}
+            >
+              <SelectTrigger className="border-border/20 focus:border-primary" style={{ opacity: disabledFields.includes('policyType') ? 0.6 : 1 }}>
                 <SelectValue placeholder="Select policy type" />
               </SelectTrigger>
               <SelectContent>
@@ -149,8 +365,8 @@ export function InsuranceDetailsForm({ data, updateData }: InsuranceDetailsFormP
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-secondary border-border/20 hover:shadow-card transition-all duration-300">
-          <CardContent className="p-4">
+        <Card className="hover:shadow-card transition-all duration-300" style={{ background: 'transparent', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+          <CardContent className="p-4" style={{ background: 'transparent' }}>
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 rounded-full bg-success/20 flex items-center justify-center">
                 <Heart className="w-4 h-4 text-success" />
@@ -164,17 +380,39 @@ export function InsuranceDetailsForm({ data, updateData }: InsuranceDetailsFormP
                 <SelectValue placeholder="Select checkup requirement" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="yes">Yes - Required</SelectItem>
-                <SelectItem value="no">No - Not Required</SelectItem>
-                <SelectItem value="completed">Already Completed</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="yes">Yes</SelectItem>
+                <SelectItem value="no">No</SelectItem>
               </SelectContent>
             </Select>
           </CardContent>
         </Card>
+
+        {data.insuranceCompany === "Care Health Insurance" && (
+          <Card className="hover:shadow-card transition-all duration-300" style={{ background: 'transparent', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+            <CardContent className="p-4" style={{ background: 'transparent' }}>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                  <Gift className="w-4 h-4 text-primary" />
+                </div>
+                <Label htmlFor="extraBonus" className="text-sm font-medium">
+                  Extra Bonus (Super/Booster/Infinity)
+                </Label>
+              </div>
+              <Select value={data.extraBonus} onValueChange={(value) => handleChange('extraBonus', value)}>
+                <SelectTrigger className="border-border/20 focus:border-primary">
+                  <SelectValue placeholder="Select extra bonus option" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="yes">Yes</SelectItem>
+                  <SelectItem value="no">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+        )}
       </div>
       
-      <div className="bg-success/10 border border-success/20 rounded-lg p-4">
+      <div className="border border-success/20 rounded-lg p-4" style={{ background: 'transparent' }}>
         <p className="text-sm text-success-foreground">
           <strong>Coverage Information:</strong> Your selected plan will provide comprehensive coverage based on the policy terms and conditions. Please review all benefits carefully.
         </p>
