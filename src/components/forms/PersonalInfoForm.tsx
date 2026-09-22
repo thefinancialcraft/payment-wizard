@@ -152,25 +152,26 @@ export function PersonalInfoForm({ data, updateData, disabledFields = [], locati
         return;
       }
 
-      const url = import.meta.env.DEV 
-        ? "/api/search/address/geocode" 
-        : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/geocode`;
-      const params = new URLSearchParams({
-        address: data.pincode,
-        podFilter: "pincode",
-        access_token: MAPPLS_API_KEY
-      });
+      let url;
+      if (import.meta.env.DEV) {
+        url = "/api/search/address/geocode";
+        const params = new URLSearchParams({
+          address: data.pincode,
+          podFilter: "pincode",
+          access_token: MAPPLS_API_KEY
+        });
+        url = `${url}?${params}`;
+      } else {
+        const mapplsUrl = `https://search.mappls.com/search/address/geocode?address=${encodeURIComponent(data.pincode)}&podFilter=pincode&access_token=${MAPPLS_API_KEY}`;
+        url = `https://corsproxy.io/?${encodeURIComponent(mapplsUrl)}`;
+      }
 
-      console.log('Request URL:', `${url}?${params}`);
+      console.log('Request URL:', url);
 
-      const response = await fetch(`${url}?${params}`, {
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
-          ...(import.meta.env.DEV ? {} : {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
-          })
         },
       });
 
