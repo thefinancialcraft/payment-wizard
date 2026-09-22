@@ -152,7 +152,9 @@ export function PersonalInfoForm({ data, updateData, disabledFields = [], locati
         return;
       }
 
-      const url = "/api/search/address/geocode";
+      const url = import.meta.env.DEV 
+        ? "/api/search/address/geocode" 
+        : "https://search.mappls.com/search/address/geocode";
       const params = new URLSearchParams({
         address: data.pincode,
         podFilter: "pincode",
