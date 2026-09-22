@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { User, Phone, Mail, Users, MapPin, Search } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
 
 interface FormData {
   policyHolderName: string;
@@ -37,6 +38,12 @@ export function PersonalInfoForm({ data, updateData, disabledFields = [], locati
   } | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const lastSearchedPincode = useRef<string>('');
+
+  // Initialize Supabase client
+  const supabase = createClient(
+    import.meta.env.VITE_SUPABASE_URL,
+    import.meta.env.VITE_SUPABASE_ANON_KEY
+  );
 
   // Auto-trigger search when pincode becomes 6 digits
   useEffect(() => {
@@ -152,42 +159,38 @@ export function PersonalInfoForm({ data, updateData, disabledFields = [], locati
         return;
       }
 
-      let url;
+      let responseData;
       if (import.meta.env.DEV) {
-        url = "/api/search/address/geocode";
+        // Development: Use Vite proxy
+        const url = "/api/search/address/geocode";
         const params = new URLSearchParams({
           address: data.pincode,
           podFilter: "pincode",
           access_token: MAPPLS_API_KEY
         });
-        url = `${url}?${params}`;
+        const response = await fetch(`${url}?${params}`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+        });
+        responseData = await response.json();
       } else {
-        const mapplsUrl = `https://search.mappls.com/search/address/geocode?address=${encodeURIComponent(data.pincode)}&podFilter=pincode&access_token=${MAPPLS_API_KEY}`;
-        url = `https://corsproxy.io/?${encodeURIComponent(mapplsUrl)}`;
+        // Production: Use Supabase Edge Function
+        const { data: supabaseData, error } = await supabase.functions.invoke('geocode', {
+          body: {
+            address: data.pincode,
+            podFilter: "pincode",
+            access_token: MAPPLS_API_KEY
+          }
+        });
+
+        if (error) {
+          throw new Error(`Supabase function error: ${error.message}`);
+        }
+        responseData = supabaseData;
       }
 
-      console.log('Request URL:', url);
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
-
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-
-      if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
-      }
-
-      // Handle 204 No Content response
-      if (response.status === 204) {
-        throw new Error('No data found for this pincode');
-      }
-
-      const responseData = await response.json();
       console.log('Response data:', responseData);
 
       const cop = responseData.copResults;
