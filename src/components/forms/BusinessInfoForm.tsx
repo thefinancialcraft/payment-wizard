@@ -16,6 +16,8 @@ interface FormData {
   relationshipManager: string;
   agentCode: string;
   proposalNo: string;
+  paymentMode?: string;
+  payuRefId?: string;
   paymentProof: string;
   grade: string;
   leadSource: string;
@@ -290,8 +292,10 @@ export function BusinessInfoForm({ data, updateData, paymentMonth, insuranceComp
   // Filter proposals based on user input
   const handleProposalInputChange = (value: string) => {
     handleChange('proposalNo', value);
-    
-    if (insuranceCompany === 'Care Health Insurance' && value) {
+
+    const isPayuBooking = data.paymentMode === 'PayU Link' || Boolean(data.payuRefId);
+
+    if (insuranceCompany === 'Care Health Insurance' && value && !isPayuBooking) {
       const filtered = faveoData.filter(item =>
         item.proposal_no.toLowerCase().includes(value.toLowerCase()) ||
         item.customer_name?.toLowerCase().includes(value.toLowerCase())
@@ -756,11 +760,11 @@ export function BusinessInfoForm({ data, updateData, paymentMonth, insuranceComp
             <div className="relative" ref={dropdownRef}>
               <Input
                 id="proposalNo"
-                placeholder={insuranceCompany === 'Care Health Insurance' ? 'Type to search proposals...' : 'Enter proposal number'}
+                placeholder={data.paymentMode === 'PayU Link' || data.payuRefId ? 'Enter proposal number manually' : insuranceCompany === 'Care Health Insurance' ? 'Type to search proposals...' : 'Enter proposal number'}
                 value={data.proposalNo}
                 onChange={(e) => handleProposalInputChange(e.target.value)}
                 className="border-border/20 focus:border-primary transition-colors"
-                readOnly={insuranceCompany === 'Care Health Insurance' && data.proposalNo !== ''}
+                readOnly={insuranceCompany === 'Care Health Insurance' && data.proposalNo !== '' && data.paymentMode !== 'PayU Link' && !data.payuRefId}
               />
               {showProposalDropdown && insuranceCompany === 'Care Health Insurance' && !data.proposalNo && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border/20 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto">

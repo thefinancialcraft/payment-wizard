@@ -249,8 +249,17 @@ export function PremiumConversionWidget({
 
       {/* MAIN TRANSPARENT WIDGET */}
       <div
-        className="conversion-widget-shell w-full max-w-3xl p-0 m-0 animate-fade-in-up bg-transparent border-0 shadow-none rounded-none"
+        className="conversion-widget-shell w-full max-w-3xl p-0 m-0 animate-fade-in-up widget-transition bg-transparent border-0 shadow-none rounded-none"
       >
+        <style>{`
+          .conversion-widget-shell.widget-transition {
+            animation-duration: 650ms;
+            animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .conversion-widget-shell.widget-transition { animation: none; }
+          }
+        `}</style>
 
         {/* =====================================================
             HEADER

@@ -247,7 +247,7 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
                       : 'border-white/15 bg-white/5 text-white/60 hover:bg-white/10'
                   }`}
                 >
-                  Direct Link
+                  Direct
                 </button>
                 <button
                   type="button"
@@ -262,7 +262,7 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
                       : 'border-white/15 bg-white/5 text-white/60 hover:bg-white/10'
                   }`}
                 >
-                  PayU link
+                  PayU
                 </button>
               </div>
             )}

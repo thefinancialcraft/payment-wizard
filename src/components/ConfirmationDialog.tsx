@@ -137,6 +137,16 @@ export function ConfirmationDialog({
                 <span className="text-gray-500 text-xs block">Month</span>
                 <span className="text-black truncate">{formData.month}</span>
               </div>
+              <div className="bg-gray-50 p-2 rounded h-16 flex flex-col justify-center">
+                <span className="text-gray-500 text-xs block">Payment Mode</span>
+                <span className="text-black truncate">{formData.paymentMode || 'Direct Link'}</span>
+              </div>
+              {(formData.paymentMode === 'PayU Link' || formData.payuRefId) && (
+                <div className="bg-gray-50 p-2 rounded h-16 flex flex-col justify-center">
+                  <span className="text-gray-500 text-xs block">PayU Ref ID</span>
+                  <span className="text-black truncate">{formData.payuRefId || 'Missing'}</span>
+                </div>
+              )}
             </div>
           </div>
 

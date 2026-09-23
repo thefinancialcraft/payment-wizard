@@ -468,7 +468,7 @@ export function PersonalInfoForm({ data, updateData, disabledFields = [], locati
               <SelectTrigger className="border-border/20 focus:border-primary" style={{ opacity: disabledFields.includes('numberOfMembers') ? 0.6 : 1, background: 'transparent' }}>
                 <SelectValue placeholder="Select number of members" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[180px] overflow-y-auto">
                 {Array.from({ length: 10 }, (_, i) => i + 1).map((num) => (
                   <SelectItem key={num} value={num.toString()}>
                     {num} {num === 1 ? 'Member' : 'Members'}

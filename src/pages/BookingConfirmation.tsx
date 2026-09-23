@@ -547,6 +547,16 @@ export default function BookingConfirmation() {
                   <div class="field-label">Month:</div>
                   <div class="field-value">${formData.month || '-'}</div>
                 </div>
+                <div class="field">
+                  <div class="field-label">Payment Mode:</div>
+                  <div class="field-value">${formData.paymentMode || 'Direct Link'}</div>
+                </div>
+                ${formData.paymentMode === 'PayU Link' || formData.payuRefId ? `
+                <div class="field">
+                  <div class="field-label">PayU Ref ID:</div>
+                  <div class="field-value">${formData.payuRefId || '-'}</div>
+                </div>
+                ` : ''}
               </div>
 
               <div class="section">

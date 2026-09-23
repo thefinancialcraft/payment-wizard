@@ -10,6 +10,8 @@ import { BusinessInfoForm } from './forms/BusinessInfoForm';
 import { useToast } from '@/hooks/use-toast';
 import { Layout } from './layout/Layout';
 import { Welcome } from './Welcome';
+import { CheckBookingWidget } from './CheckBookingWidget';
+import { UpdateBookingData, UpdateBookingWidget } from './UpdateBookingWidget';
 import { FormContainer } from './FormContainer';
 import { BusinessTypeSelect } from './BusinessTypeSelect';
 import { InsuranceCompanySelect } from './InsuranceCompanySelect';
@@ -142,6 +144,16 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
     return params.get('widget') === 'conversion';
   };
 
+  const getInitialShowCheckBooking = () => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('widget') === 'check-booking';
+  };
+
+  const getInitialShowUpdateBooking = () => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('widget') === 'update-booking' && Boolean(params.get('bookingId'));
+  };
+
   // Derive which find=proposal part to show initially from URL
   const getInitialFindPart = () => {
     const params = new URLSearchParams(window.location.search);
@@ -159,6 +171,9 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
   const [currentStep, setCurrentStep] = useState(getInitialStep);
   const [showWelcome, setShowWelcome] = useState(getInitialShowWelcome);
   const [showPremiumConversion, setShowPremiumConversion] = useState(getInitialShowPremiumConversion);
+  const [showCheckBooking, setShowCheckBooking] = useState(getInitialShowCheckBooking);
+  const [showUpdateBooking, setShowUpdateBooking] = useState(getInitialShowUpdateBooking);
+  const [updateBookingData, setUpdateBookingData] = useState<UpdateBookingData | null>(null);
   const [hideGreeting, setHideGreeting] = useState(false);
   const [showGreeting, setShowGreeting] = useState(false);
   const [showButtons, setShowButtons] = useState(false);
@@ -218,6 +233,30 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
     if (widgetParam === 'conversion') {
       setShowWelcome(false);
       setShowPremiumConversion(true);
+      setShowCheckBooking(false);
+      setShowUpdateBooking(false);
+      setShowBusinessTypeSelect(false);
+      setShowCompanySelect(false);
+      setShowProposalWidget(false);
+      return;
+    }
+
+    if (widgetParam === 'update-booking') {
+      setShowWelcome(false);
+      setShowPremiumConversion(false);
+      setShowCheckBooking(false);
+      setShowUpdateBooking(true);
+      setShowBusinessTypeSelect(false);
+      setShowCompanySelect(false);
+      setShowProposalWidget(false);
+      return;
+    }
+
+    if (widgetParam === 'check-booking') {
+      setShowWelcome(false);
+      setShowPremiumConversion(false);
+      setShowUpdateBooking(false);
+      setShowCheckBooking(true);
       setShowBusinessTypeSelect(false);
       setShowCompanySelect(false);
       setShowProposalWidget(false);
@@ -245,6 +284,37 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
       setShowProposalWidget(true);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    const widgetParam = searchParams.get('widget');
+    const bookingId = searchParams.get('bookingId');
+
+    if (widgetParam !== 'update-booking' || !bookingId || updateBookingData) return;
+
+    const loadUpdateBooking = async () => {
+      const { data } = await supabase
+        .from('payment_bookings')
+        .select('booking_code, proposal_no, policy_holder_name, premium')
+        .eq('booking_code', bookingId)
+        .maybeSingle();
+
+      if (!data) {
+        setShowUpdateBooking(false);
+        setShowCheckBooking(true);
+        setSearchParams({ widget: 'check-booking' });
+        return;
+      }
+
+      setUpdateBookingData({
+        bookingId: data.booking_code,
+        proposalNo: data.proposal_no || '',
+        proposerName: data.policy_holder_name || '',
+        basePremium: data.premium || ''
+      });
+    };
+
+    void loadUpdateBooking();
+  }, [searchParams, updateBookingData]);
 
   // Sync state → URL: update URL when widget state changes
   useEffect(() => {
@@ -736,12 +806,16 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
 
   const handleOpenPremiumConversion = () => {
     setShowWelcome(false);
+    setShowCheckBooking(false);
+    setShowUpdateBooking(false);
     setShowPremiumConversion(true);
     setSearchParams({ widget: 'conversion' });
   };
 
   const handleClosePremiumConversion = () => {
     setShowPremiumConversion(false);
+    setShowCheckBooking(false);
+    setShowUpdateBooking(false);
     setShowWelcome(true);
     setHideGreeting(false);
     setShowButtons(false);
@@ -749,30 +823,70 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
   };
 
   const updateBooking = () => {
-    // TODO: Implement update booking logic
-    // For now, show the same animation as startWizard
-    // First hide buttons immediately
+    setShowWelcome(false);
+    setShowCheckBooking(true);
+    setShowUpdateBooking(false);
+    setShowPremiumConversion(false);
+    setSearchParams({ widget: 'check-booking' });
+  };
+
+  const handleCheckBookingCancel = () => {
+    setShowCheckBooking(false);
+    setShowUpdateBooking(false);
+    setShowWelcome(true);
+    setHideGreeting(false);
     setShowButtons(false);
-    
-    // After 0.8 seconds, hide greeting text
-    setTimeout(() => {
-      setHideGreeting(true);
-      
-      // After another 800ms, hide welcome screen and show business type select
-      setTimeout(() => {
-        setShowWelcome(false);
-        setShowBusinessTypeSelect(true);
-        setSearchParams({ find: 'proposal', part: 'business-type' });
-        if ((window as any).scrollToTop) {
-          (window as any).scrollToTop();
-        }
-      }, 800);
-    }, 800);
-    
-    toast({
-      title: "Update Booking",
-      description: "Update booking feature will be implemented soon.",
+    setSearchParams({});
+  };
+
+  const handleCheckBooking = async (bookingId: string) => {
+    const { data, error } = await supabase
+      .from('payment_bookings')
+      .select('booking_code, proposal_no, policy_holder_name, premium')
+      .eq('booking_code', bookingId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error('Unable to check booking right now. Please try again.');
+    }
+
+    if (!data) {
+      throw new Error('Booking ID not found. Please check the ID and try again.');
+    }
+
+    setUpdateBookingData({
+      bookingId: data.booking_code,
+      proposalNo: data.proposal_no || '',
+      proposerName: data.policy_holder_name || '',
+      basePremium: data.premium || ''
     });
+    setShowCheckBooking(false);
+    setShowUpdateBooking(true);
+    setSearchParams({ widget: 'update-booking', bookingId: data.booking_code });
+  };
+
+  const handleUpdateBookingCancel = () => {
+    setShowUpdateBooking(false);
+    setUpdateBookingData(null);
+    setShowWelcome(true);
+    setHideGreeting(false);
+    setShowButtons(false);
+    setSearchParams({});
+  };
+
+  const handleUpdateBooking = async (proposalNo: string) => {
+    if (!updateBookingData) return;
+
+    const { error } = await supabase
+      .from('payment_bookings')
+      .update({ proposal_no: proposalNo })
+      .eq('booking_code', updateBookingData.bookingId);
+
+    if (error) {
+      throw new Error('Unable to update proposal number. Please try again.');
+    }
+
+    navigate(`/booking-confirmation/${encodeURIComponent(updateBookingData.bookingId)}`);
   };
 
   const prevStep = () => {
@@ -836,6 +950,8 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
       relationshipManager: '',
       agentCode: '',
       proposalNo: '',
+      paymentMode: 'Direct Link',
+      payuRefId: '',
       paymentProof: '',
       grade: '',
       leadSource: ''
@@ -912,6 +1028,18 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
           onRestoreSession={handleRestoreSession}
           onCreateNewSession={handleRemovePreservedSession}
         />
+      ) : showUpdateBooking ? (
+        updateBookingData ? (
+          <UpdateBookingWidget
+            booking={updateBookingData}
+            onCancel={handleUpdateBookingCancel}
+            onUpdate={handleUpdateBooking}
+          />
+        ) : (
+          <div className="flex min-h-screen items-center justify-center text-sm text-white/60">Loading booking details...</div>
+        )
+      ) : showCheckBooking ? (
+        <CheckBookingWidget onCancel={handleCheckBookingCancel} onCheckBooking={handleCheckBooking} />
       ) : showPremiumConversion ? (
         <PremiumConversionWidget
           onCancel={handleClosePremiumConversion}
