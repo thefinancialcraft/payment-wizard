@@ -336,6 +336,7 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
               borderRadius: '6px',
               padding: '8px 12px',
               marginTop: '8px',
+              marginBottom: '16px',
               textAlign: 'center'
             }}>
               <p style={{
@@ -344,7 +345,7 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
                 fontWeight: '500',
                 margin: '0'
               }}>
-                ⚠️ Some proposals are already present in database
+               You have selected a proposal that is already booked. Please choose a different proposal from the list.
               </p>
             </div>
           )}
