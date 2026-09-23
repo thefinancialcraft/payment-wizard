@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
 import { Button } from '@/components/ui/button';
+import { Calculator } from 'lucide-react';
 
 interface WelcomeProps {
   showGreeting: boolean;
@@ -8,9 +9,10 @@ interface WelcomeProps {
   showButtons: boolean;
   onStart: () => void;
   onUpdateBooking: () => void;
+  onPremiumConversion: () => void;
 }
 
-export function Welcome({ showGreeting, hideGreeting, showButtons, onStart, onUpdateBooking }: WelcomeProps) {
+export function Welcome({ showGreeting, hideGreeting, showButtons, onStart, onUpdateBooking, onPremiumConversion }: WelcomeProps) {
   return (
     <div className="flex items-center justify-center min-h-screen" style={{ padding: '0 16px' }}>
       <div className="text-center animate-fade-in-up" style={{
@@ -173,7 +175,7 @@ export function Welcome({ showGreeting, hideGreeting, showButtons, onStart, onUp
           pointerEvents: showButtons && !hideGreeting ? 'auto' : 'none',
           marginTop: '24px',
           width: '100%',
-          maxWidth: '400px',
+          maxWidth: '540px',
           padding: '0 16px'
         }}>
           <div style={{
@@ -196,10 +198,33 @@ export function Welcome({ showGreeting, hideGreeting, showButtons, onStart, onUp
                 backdropFilter: 'blur(10px)',
                 WebkitBackdropFilter: 'blur(10px)',
                 flex: '1',
-                minWidth: '120px'
+                minWidth: '130px'
               }}
             >
               Update Booking
+            </Button>
+            <Button
+              onClick={onPremiumConversion}
+              variant="outline"
+              className="glass-shimmer hover:opacity-90"
+              style={{
+                background: 'rgba(56, 189, 248, 0.15)',
+                border: '1px solid rgba(56, 189, 248, 0.35)',
+                color: '#38bdf8',
+                padding: '8px 16px',
+                fontSize: 'clamp(12px, 2.5vw, 14px)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                flex: '1',
+                minWidth: '150px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px'
+              }}
+            >
+             
+              Premium Conversion
             </Button>
             <Button
               onClick={onStart}
@@ -214,7 +239,7 @@ export function Welcome({ showGreeting, hideGreeting, showButtons, onStart, onUp
                 backdropFilter: 'blur(10px)',
                 WebkitBackdropFilter: 'blur(10px)',
                 flex: '1',
-                minWidth: '120px'
+                minWidth: '130px'
               }}
             >
               Create New One

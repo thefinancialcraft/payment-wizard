@@ -14,6 +14,7 @@ import { FormContainer } from './FormContainer';
 import { BusinessTypeSelect } from './BusinessTypeSelect';
 import { InsuranceCompanySelect } from './InsuranceCompanySelect';
 import { ProposalWidget } from './ProposalWidget';
+import { PremiumConversionWidget } from './PremiumConversionWidget';
 import { supabase } from '@/lib/supabase';
 import { 
   createSession, 
@@ -130,8 +131,13 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
   };
   const getInitialShowWelcome = () => {
     const params = new URLSearchParams(window.location.search);
-    // If URL has a step or find param, skip welcome
-    return !params.has('step') && !params.has('find');
+    // If URL has a step, find, or widget param, skip welcome
+    return !params.has('step') && !params.has('find') && !params.has('widget');
+  };
+
+  const getInitialShowPremiumConversion = () => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('widget') === 'conversion';
   };
 
   // Derive which find=proposal part to show initially from URL
@@ -150,6 +156,7 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
 
   const [currentStep, setCurrentStep] = useState(getInitialStep);
   const [showWelcome, setShowWelcome] = useState(getInitialShowWelcome);
+  const [showPremiumConversion, setShowPremiumConversion] = useState(getInitialShowPremiumConversion);
   const [hideGreeting, setHideGreeting] = useState(false);
   const [showGreeting, setShowGreeting] = useState(false);
   const [showButtons, setShowButtons] = useState(false);
@@ -198,13 +205,24 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
     leadSource: ''
   });
 
-  // Sync URL → state: when user navigates directly to a /?find=proposal&part=X URL
+  // Sync URL → state: when user navigates directly to a /?find=proposal&part=X URL or ?widget=conversion
   useEffect(() => {
+    const widgetParam = searchParams.get('widget');
+    if (widgetParam === 'conversion') {
+      setShowWelcome(false);
+      setShowPremiumConversion(true);
+      setShowBusinessTypeSelect(false);
+      setShowCompanySelect(false);
+      setShowProposalWidget(false);
+      return;
+    }
+
     const findParam = searchParams.get('find');
     const partParam = searchParams.get('part');
     if (findParam !== 'proposal') return;
 
     setShowWelcome(false);
+    setShowPremiumConversion(false);
 
     if (partParam === 'business-type') {
       setShowBusinessTypeSelect(true);
@@ -223,14 +241,16 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
 
   // Sync state → URL: update URL when widget state changes
   useEffect(() => {
-    if (showBusinessTypeSelect) {
+    if (showPremiumConversion) {
+      setSearchParams({ widget: 'conversion' });
+    } else if (showBusinessTypeSelect) {
       setSearchParams({ find: 'proposal', part: 'business-type' });
     } else if (showCompanySelect) {
       setSearchParams({ find: 'proposal', part: 'company' });
     } else if (showProposalWidget) {
       setSearchParams({ find: 'proposal', part: 'proposal-no' });
     }
-  }, [showBusinessTypeSelect, showCompanySelect, showProposalWidget]);
+  }, [showPremiumConversion, showBusinessTypeSelect, showCompanySelect, showProposalWidget]);
 
   // Scroll to top when step changes (only on step changes, not field changes)
   useEffect(() => {
@@ -628,6 +648,20 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
     setSearchParams({}); // Clear URL parameter
   };
 
+  const handleOpenPremiumConversion = () => {
+    setShowWelcome(false);
+    setShowPremiumConversion(true);
+    setSearchParams({ widget: 'conversion' });
+  };
+
+  const handleClosePremiumConversion = () => {
+    setShowPremiumConversion(false);
+    setShowWelcome(true);
+    setHideGreeting(false);
+    setShowButtons(false);
+    setSearchParams({});
+  };
+
   const updateBooking = () => {
     // TODO: Implement update booking logic
     // For now, show the same animation as startWizard
@@ -781,6 +815,24 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
           showButtons={showButtons}
           onStart={startWizard}
           onUpdateBooking={updateBooking}
+          onPremiumConversion={handleOpenPremiumConversion}
+        />
+      ) : showPremiumConversion ? (
+        <PremiumConversionWidget
+          onCancel={handleClosePremiumConversion}
+          onApplyToBooking={(calcData) => {
+            setFormData(prev => ({
+              ...prev,
+              premium: calcData.premium,
+              netPremium: calcData.netPremium,
+              tenure: calcData.tenure,
+              discountOffer: calcData.discountOffer,
+              discountOfferType: calcData.discountOfferType,
+              updatedPremium: calcData.updatedPremium
+            }));
+            setShowPremiumConversion(false);
+            startWizard();
+          }}
         />
       ) : showBusinessTypeSelect ? (
         <BusinessTypeSelect onSelect={handleBusinessTypeSelect} onCancel={handleBusinessTypeSelectCancel} />
