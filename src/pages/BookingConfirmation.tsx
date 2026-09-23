@@ -42,6 +42,8 @@ interface FormData {
   relationshipManager: string;
   agentCode: string;
   proposalNo: string;
+  paymentMode: string;
+  payuRefId: string;
   grade: string;
   leadSource: string;
   paymentProof: string;
@@ -160,6 +162,8 @@ export default function BookingConfirmation() {
           relationshipManager: data.relationship_manager || '',
           agentCode: data.agent_code || '',
           proposalNo: data.proposal_no || '',
+          paymentMode: data.payment_mode || 'Direct Link',
+          payuRefId: data.payu_ref_id || '',
           grade: data.grade || '',
           leadSource: data.lead_source || '',
           paymentProof: data.payment_proof || ''
@@ -252,6 +256,8 @@ export default function BookingConfirmation() {
         relationship_manager: formData.relationshipManager,
         agent_code: formData.agentCode,
         proposal_no: formData.proposalNo,
+        payment_mode: formData.paymentMode || 'Direct Link',
+        payu_ref_id: formData.payuRefId || null,
         grade: formData.grade,
         lead_source: formData.leadSource,
         payment_proof: formData.paymentProof,

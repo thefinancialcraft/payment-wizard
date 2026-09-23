@@ -12,10 +12,12 @@ interface ProposalWidgetProps {
 
 export function ProposalWidget({ onSelect, onCancel, businessType, insuranceCompany }: ProposalWidgetProps) {
   const [proposalNo, setProposalNo] = useState('');
+  const [payuRefId, setPayuRefId] = useState('');
   const [filteredProposals, setFilteredProposals] = useState<any[]>([]);
   const [isLoadingFaveoData, setIsLoadingFaveoData] = useState(false);
   const [showProposalDropdown, setShowProposalDropdown] = useState(false);
   const [proposalError, setProposalError] = useState('');
+  const [linkType, setLinkType] = useState<'direct' | 'payu'>('direct');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Search proposals live from database when user types 3+ characters
@@ -84,6 +86,22 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
   };
 
   const handleSubmit = () => {
+    if (shouldRequireProposal && linkType === 'payu') {
+      const trimmedPayuRef = payuRefId.trim();
+      const payuDigits = trimmedPayuRef.replace(/\D/g, '');
+      if (!trimmedPayuRef || payuDigits.length < 10) {
+        setProposalError('Please enter a valid PayU Ref Id or Payment Id (minimum 10 digits)');
+        return;
+      }
+
+      onSelect({
+        proposalNo: '',
+        paymentMode: 'PayU Link',
+        payuRefId: trimmedPayuRef
+      });
+      return;
+    }
+
     if (shouldRequireProposal) {
       const isValid = proposalNo.trim() && filteredProposals.some(p => p.proposal_no.toLowerCase() === proposalNo.trim().toLowerCase());
       if (!isValid) {
@@ -102,15 +120,22 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
         return;
       }
       
-      onSelect(selectedProposal || { proposalNo: proposalNo });
+      onSelect({
+        ...(selectedProposal || { proposalNo }),
+        paymentMode: 'Direct Link',
+        payuRefId: ''
+      });
     }
   };
 
   // Check if both conditions are met
   const shouldRequireProposal = businessType === 'In House' && insuranceCompany === 'Care Health Insurance';
+  const isPayuMode = shouldRequireProposal && linkType === 'payu';
   const isProposalValid = proposalNo.trim() && filteredProposals.some(p => p.proposal_no.toLowerCase() === proposalNo.trim().toLowerCase());
   const selectedProposal = filteredProposals.find(p => p.proposal_no.toLowerCase() === proposalNo.trim().toLowerCase());
   const isProposalAlreadyBooked = selectedProposal?.alreadyBooked;
+  const validPayuRef = payuRefId.trim().replace(/\D/g, '').length >= 10;
+  const canSubmit = isPayuMode ? validPayuRef : shouldRequireProposal ? (isProposalValid && !proposalError && !isProposalAlreadyBooked) : proposalNo.trim().length > 0;
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -158,6 +183,13 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
               transform: translateY(0);
             }
           }
+          @keyframes metallic-shimmer {
+            0% { background-position: 200% center; }
+            100% { background-position: -200% center; }
+          }
+          .metallic-text {
+            animation: metallic-shimmer 3s linear infinite;
+          }
           .minimal-input {
             background-color: transparent;
             border: none;
@@ -169,9 +201,11 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
             outline: none;
             text-align: center;
             transition: border-color 0.3s;
-            width: 240px;
+            width: 280px;
             display: block;
             margin: 0 auto 40px;
+            font-family: 'Lufga', sans-serif;
+            letter-spacing: -0.3px;
           }
           .minimal-input:focus {
             border-bottom-color: rgba(255, 255, 255, 0.5);
@@ -194,25 +228,78 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
           maxWidth: '300px',
           textAlign: 'center'
         }}>
-          <p style={{
-            color: 'rgba(255, 255, 255, 0.7)',
-            fontSize: '15px',
-            fontWeight: '400',
+          <div style={{
             marginBottom: '32px',
             textAlign: 'center'
           }}>
-            Enter Proposal No.
-          </p>
+            {shouldRequireProposal && (
+              <div className="mb-5 flex items-center justify-center gap-2" role="group" aria-label="Payment link type">
+                <button
+                  type="button"
+                  aria-pressed={linkType === 'direct'}
+                  onClick={() => {
+                    setLinkType('direct');
+                    setProposalError('');
+                  }}
+                  className={`min-w-[120px] rounded-md border px-4 py-2 text-xs transition-all duration-300 ease-out ${
+                    linkType === 'direct'
+                      ? 'scale-105 border-purple-500 bg-purple-600 text-white'
+                      : 'border-white/15 bg-white/5 text-white/60 hover:bg-white/10'
+                  }`}
+                >
+                  Direct Link
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={linkType === 'payu'}
+                  onClick={() => {
+                    setLinkType('payu');
+                    setProposalError('');
+                  }}
+                  className={`min-w-[120px] rounded-md border px-4 py-2 text-xs transition-all duration-300 ease-out ${
+                    linkType === 'payu'
+                      ? 'scale-105 border-purple-500 bg-purple-600 text-white'
+                      : 'border-white/15 bg-white/5 text-white/60 hover:bg-white/10'
+                  }`}
+                >
+                  PayU link
+                </button>
+              </div>
+            )}
+            <h2 className="metallic-text" style={{
+              fontSize: '22px',
+              fontWeight: '500',
+              background: 'linear-gradient(135deg, #ffffff 0%, #a0a0a0 25%, #ffffff 50%, #d0d0d0 75%, #ffffff 100%)',
+              backgroundSize: '200% auto',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              // margin: 0,
+              letterSpacing: '-0.5px',
+              fontFamily: 'Lufga, sans-serif',
+              textAlign: 'center',
+              marginTop: '26px',
+            }}>
+              {isPayuMode ? 'Please enter PayU Ref Id' : 'Enter Proposal No.'}
+            </h2>
+          </div>
 
           <div className="relative" ref={dropdownRef}>
             <input
-              placeholder="e.g. ABC123456"
+              placeholder={isPayuMode ? 'e.g. PAYU123456' : 'e.g. ABC123456'}
               className="minimal-input"
               type="text"
-              value={proposalNo}
-              onChange={(e) => handleProposalInputChange(e.target.value)}
+              value={isPayuMode ? payuRefId : proposalNo}
+              onChange={(e) => {
+                if (isPayuMode) {
+                  setPayuRefId(e.target.value);
+                  setProposalError('');
+                  return;
+                }
+                handleProposalInputChange(e.target.value);
+              }}
             />
-            {showProposalDropdown && (
+            {!isPayuMode && showProposalDropdown && (
               <div style={{
                 position: 'absolute',
                 top: '100%',
@@ -371,28 +458,28 @@ export function ProposalWidget({ onSelect, onCancel, businessType, insuranceComp
             </button>
             <button
               onClick={handleSubmit}
-              disabled={shouldRequireProposal ? (!isProposalValid || !!proposalError || isProposalAlreadyBooked) : !proposalNo.trim()}
+              disabled={!canSubmit}
               className="mirror-btn"
               style={{
                 padding: '10px 24px',
-                backgroundColor: (shouldRequireProposal ? (isProposalValid && !proposalError && !isProposalAlreadyBooked) : proposalNo.trim())
+                backgroundColor: canSubmit
                   ? 'rgba(52, 187, 136, 0.15)'
                   : 'rgba(52, 187, 136, 0.05)',
                 color: '#34BB88',
                 border: '1px solid rgba(52, 187, 136, 0.3)',
                 borderRadius: '30px',
                 fontWeight: '500',
-                cursor: (shouldRequireProposal ? (isProposalValid && !proposalError && !isProposalAlreadyBooked) : proposalNo.trim()) ? 'pointer' : 'not-allowed',
+                cursor: canSubmit ? 'pointer' : 'not-allowed',
                 fontSize: '13px',
                 backdropFilter: 'blur(10px)',
-                opacity: (shouldRequireProposal ? (isProposalValid && !proposalError && !isProposalAlreadyBooked) : proposalNo.trim()) ? 1 : 0.5
+                opacity: canSubmit ? 1 : 0.5
               }}
             >
               Next
             </button>
           </div>
 
-          {shouldRequireProposal && (
+          {shouldRequireProposal && !isPayuMode && (
             <p style={{
               color: '#FFD700',
               fontSize: '12px',

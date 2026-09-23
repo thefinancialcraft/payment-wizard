@@ -72,6 +72,8 @@ interface FormData {
   relationshipManager: string;
   agentCode: string;
   proposalNo: string;
+  paymentMode: string;
+  payuRefId: string;
   paymentProof: string;
   grade: string;
   leadSource: string;
@@ -203,6 +205,8 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
     relationshipManager: '',
     agentCode: '',
     proposalNo: '',
+    paymentMode: 'Direct Link',
+    payuRefId: '',
     paymentProof: '',
     grade: '',
     leadSource: ''
@@ -588,6 +592,8 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
 
     const updatedData: any = {
       proposalNo: proposalData.proposal_no || '',
+      paymentMode: proposalData.paymentMode || 'Direct Link',
+      payuRefId: proposalData.payuRefId || '',
       policyHolderName: proposalData.customer_name || formData.policyHolderName,
       numberOfMembers: proposalData.no_of_lives ? String(proposalData.no_of_lives) : formData.numberOfMembers,
       effectiveDate: proposalData.policy_start_date || formData.effectiveDate,
