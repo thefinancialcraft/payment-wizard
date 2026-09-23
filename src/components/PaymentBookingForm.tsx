@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { User, Shield, IndianRupee, Building, Calendar } from 'lucide-react';
 import { PersonalInfoForm } from './forms/PersonalInfoForm';
@@ -21,8 +21,8 @@ import {
   getSession, 
   updateSession, 
   clearSession, 
-  resetSession, 
-  hasSession 
+  hasSession,
+  SessionData
 } from '@/lib/sessionManager';
 
 interface PaymentBookingFormProps {
@@ -165,6 +165,9 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
   const [showProposalWidget, setShowProposalWidget] = useState(getInitialShowProposal);
   const [disabledFields, setDisabledFields] = useState<string[]>([]);
   const [locationFetched, setLocationFetched] = useState(false);
+  const [preservedSession, setPreservedSession] = useState<SessionData | null>(null);
+  const isSessionHydrated = useRef(false);
+  const skipNextSessionSync = useRef(false);
 
   const [formData, setFormData] = useState<FormData>({
     policyHolderName: '',
@@ -288,7 +291,8 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
     // First check if returning from confirmation page
     if (locationState?.returnFromConfirmation && locationState?.formData) {
       setFormData(locationState.formData);
-      setCurrentStep(5); // Set to last step
+      const returnStep = locationState.returnStep || 5;
+      setCurrentStep(returnStep);
       setShowWelcome(false);
       setShowBusinessTypeSelect(false);
       setShowCompanySelect(false);
@@ -296,15 +300,19 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
       // Create a new session for this resumed session
       createSession(locationState.formData);
       updateSession({
-        currentStep: 5,
+        currentStep: returnStep,
+        currentStepSlug: steps[returnStep - 1]?.slug || '',
         showWelcome: false,
         showBusinessTypeSelect: false,
         showCompanySelect: false,
         showProposalWidget: false,
         formData: locationState.formData
       });
+      setSearchParams({ step: steps[returnStep - 1]?.slug || 'financial-information' });
       return;
     }
+
+    const isHomeScreen = !searchParams.has('step') && !searchParams.has('find') && !searchParams.has('widget');
 
     // Check if we have an existing session
     if (hasSession()) {
@@ -313,6 +321,12 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
         // Only load if the form has some actual data (not all empty)
         const hasData = Object.values(session.formData).some(value => value !== '' && value !== 'India');
         if (hasData) {
+          if (isHomeScreen) {
+            setPreservedSession(session);
+            setShowWelcome(true);
+            return;
+          }
+
           setFormData(session.formData);
           setCurrentStep(session.currentStep);
           setShowWelcome(session.showWelcome);
@@ -351,19 +365,33 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
             setSearchParams({});
           }
         } else {
-          // Clear empty session and create new one
+          // Remove stale empty session; a fresh session starts at step 1.
           clearSession();
-          createSession(formData);
         }
       }
     } else {
-      // Create new session if none exists
-      createSession(formData);
+      // A new session is initialized only when the user reaches step 1.
+      if (searchParams.get('step') === 'insurer-information') {
+        createSession(formData);
+      }
     }
+
   }, [locationState]);
 
   // Update session whenever state changes
   useEffect(() => {
+    if (preservedSession) return;
+
+    if (skipNextSessionSync.current) {
+      skipNextSessionSync.current = false;
+      return;
+    }
+
+    if (!isSessionHydrated.current) {
+      isSessionHydrated.current = true;
+      return;
+    }
+
     updateSession({
       formData,
       currentStep,
@@ -418,6 +446,54 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
     setFormData(prev => ({ ...prev, ...data }));
   };
 
+  const handleRestoreSession = () => {
+    if (!preservedSession) return;
+
+    const session = preservedSession;
+    setFormData(session.formData);
+    setCurrentStep(session.currentStep);
+    setShowWelcome(false);
+    setShowPremiumConversion(false);
+    setHideGreeting(session.hideGreeting);
+    setShowButtons(session.showButtons);
+    setShowBusinessTypeSelect(session.showBusinessTypeSelect);
+    setShowCompanySelect(session.showCompanySelect);
+    setShowProposalWidget(session.showProposalWidget);
+    setDisabledFields(session.disabledFields || []);
+    setLocationFetched(session.locationFetched);
+    setPreservedSession(null);
+
+    updateSession({
+      formData: session.formData,
+      currentStep: session.currentStep,
+      currentStepSlug: session.currentStepSlug,
+      showWelcome: false,
+      hideGreeting: session.hideGreeting,
+      showButtons: session.showButtons,
+      showBusinessTypeSelect: session.showBusinessTypeSelect,
+      showCompanySelect: session.showCompanySelect,
+      showProposalWidget: session.showProposalWidget,
+      disabledFields: session.disabledFields || [],
+      locationFetched: session.locationFetched,
+    });
+
+    if (session.showBusinessTypeSelect) {
+      setSearchParams({ find: 'proposal', part: 'business-type' });
+    } else if (session.showCompanySelect) {
+      setSearchParams({ find: 'proposal', part: 'company' });
+    } else if (session.showProposalWidget) {
+      setSearchParams({ find: 'proposal', part: 'proposal-no' });
+    } else {
+      setSearchParams({ step: session.currentStepSlug || 'insurer-information' });
+    }
+  };
+
+  const handleRemovePreservedSession = () => {
+    skipNextSessionSync.current = true;
+    clearSession();
+    setPreservedSession(null);
+  };
+
   const nextStep = () => {
     if (currentStep < steps.length) {
       const nextStepId = currentStep + 1;
@@ -432,11 +508,8 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
   };
 
   const startWizard = () => {
-    // Create a new session when starting the wizard
-    resetSession(formData);
-    
-    // Update session to start wizard
     updateSession({
+      formData,
       showWelcome: false,
       showBusinessTypeSelect: true,
       hideGreeting: true,
@@ -493,6 +566,10 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
       });
     } else {
       // Non-Care company: go straight to step 1
+      const nextFormData = { ...formData, insuranceCompany: company };
+      if (!hasSession()) {
+        createSession(nextFormData);
+      }
       setSearchParams({ step: 'insurer-information' });
       // Update session
       updateSession({
@@ -501,7 +578,7 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
         showWelcome: false,
         currentStep: 1,
         currentStepSlug: 'insurer-information',
-        formData: { ...formData, insuranceCompany: company }
+        formData: nextFormData
       });
     }
   };
@@ -592,6 +669,9 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
     if (proposalData.agent_name) fieldsToDisable.push('relationshipManager');
 
     const finalFormData = { ...formData, ...updatedData };
+    if (!hasSession()) {
+      createSession(finalFormData);
+    }
     setFormData(finalFormData);
     setDisabledFields(fieldsToDisable);
     setShowProposalWidget(false);
@@ -779,11 +859,17 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
   };
 
   const handleSubmit = () => {
-    // Clear session on form submit
-    clearSession();
-    
-    // Clear location cache on submit
-    setLocationFetched(false);
+    // Keep a recoverable snapshot until confirmation succeeds.
+    updateSession({
+      formData,
+      currentStep,
+      currentStepSlug: steps[currentStep - 1]?.slug || 'business-information',
+      showWelcome: false,
+      showBusinessTypeSelect: false,
+      showCompanySelect: false,
+      showProposalWidget: false,
+      locationFetched: formData.city !== '' && formData.district !== '',
+    });
     navigate('/booking-confirmation', { state: { formData } });
   };
 
@@ -798,7 +884,7 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
       case 3:
         return <InsuranceDetailsForm data={formData} updateData={updateFormData} disabledFields={disabledFields} />;
       case 4:
-        return <FinancialInfoForm data={formData} updateData={updateFormData} disabledFields={disabledFields} />;
+        return <FinancialInfoForm data={{ ...formData, paymentDate: formData.paymentDate }} updateData={updateFormData} disabledFields={disabledFields} />;
       case 5:
         return <BusinessInfoForm data={formData} updateData={updateFormData} paymentMonth={formData.paymentMonth} insuranceCompany={formData.insuranceCompany} disabledFields={disabledFields} />;
       default:
@@ -816,10 +902,14 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
           onStart={startWizard}
           onUpdateBooking={updateBooking}
           onPremiumConversion={handleOpenPremiumConversion}
+          sessionPreview={preservedSession?.formData}
+          onRestoreSession={handleRestoreSession}
+          onCreateNewSession={handleRemovePreservedSession}
         />
       ) : showPremiumConversion ? (
         <PremiumConversionWidget
           onCancel={handleClosePremiumConversion}
+          paymentDate={formData.paymentDate}
           onApplyToBooking={(calcData) => {
             setFormData(prev => ({
               ...prev,

@@ -52,12 +52,14 @@ interface PremiumConversionWidgetProps {
   onCancel: () => void;
   onApplyToBooking?: (data: CalculatedData) => void;
   initialBasePremium?: string;
+  paymentDate?: string;
 }
 
 export function PremiumConversionWidget({
   onCancel,
   onApplyToBooking,
   initialBasePremium = '',
+  paymentDate = '',
 }: PremiumConversionWidgetProps) {
   const { toast } = useToast();
 
@@ -88,11 +90,24 @@ export function PremiumConversionWidget({
   const netDiff =
     baseAmount > 0 ? baseAmount - netAmount : 0;
 
-  // 2. 90% Rule
-  const amountAfter90 = netAmount * 0.9;
-
-  const diff90 =
-    netAmount - amountAfter90;
+  // 2. 90% Rule: dates before 21 August 2026 are exempt.
+  const parsedPaymentDate = paymentDate
+    ? paymentDate.includes('/')
+      ? (() => {
+          const [day, month, year] = paymentDate.split('/').map(Number);
+          return new Date(year, month - 1, day);
+        })()
+      : new Date(paymentDate)
+    : undefined;
+  const ninetyPercentRuleStart = new Date(2026, 7, 21);
+  const ninetyPercentBeforeDiscountStart = new Date(2026, 7, 21);
+  const ninetyPercentBeforeDiscountEnd = new Date(2026, 8, 24);
+  const isNinetyPercentRuleApplicable =
+    !parsedPaymentDate || parsedPaymentDate >= ninetyPercentRuleStart;
+  const isNinetyPercentAfterDiscount =
+    parsedPaymentDate !== undefined &&
+    parsedPaymentDate >= ninetyPercentBeforeDiscountStart &&
+    parsedPaymentDate < ninetyPercentBeforeDiscountEnd;
 
   // 3. Tenure Rate
   let tenureMultiplier = 1.0;
@@ -106,11 +121,13 @@ export function PremiumConversionWidget({
     tenureText = '80% (20% off)';
   }
 
-  const amountAfterTenure =
-    amountAfter90 * tenureMultiplier;
-
-  const tenureDiff =
-    amountAfter90 - amountAfterTenure;
+  const amountBeforeTenure = isNinetyPercentAfterDiscount
+    ? netAmount
+    : isNinetyPercentRuleApplicable
+      ? netAmount * 0.9
+      : netAmount;
+  const amountAfterTenure = amountBeforeTenure * tenureMultiplier;
+  const tenureDiff = amountBeforeTenure - amountAfterTenure;
 
   // 4. Discount
   let discountAmount = 0;
@@ -135,10 +152,18 @@ export function PremiumConversionWidget({
     }
   }
 
-  const finalAmount = Math.max(
-    0,
-    amountAfterTenure - discountAmount
-  );
+  const amountAfterDiscount = Math.max(0, amountAfterTenure - discountAmount);
+  const amountAfter90 = isNinetyPercentAfterDiscount
+    ? amountAfterDiscount * 0.9
+    : amountAfterDiscount;
+  const diff90 = isNinetyPercentAfterDiscount
+    ? amountAfterDiscount - amountAfter90
+    : isNinetyPercentRuleApplicable
+      ? netAmount - netAmount * 0.9
+      : 0;
+  const finalAmount = isNinetyPercentAfterDiscount
+    ? amountAfter90
+    : amountAfterDiscount;
 
   const totalSavings =
     baseAmount > finalAmount
@@ -911,8 +936,17 @@ export function PremiumConversionWidget({
                   </TableCell>
 
                   <TableCell className="py-2.5 px-3 text-white/50">
-                    <span className="sm:hidden">90% of net</span>
-                    <span className="hidden sm:inline">Net Premium × 0.9 (10% standard rule)</span>
+                    {isNinetyPercentRuleApplicable ? (
+                      <>
+                        <span className="sm:hidden">90% of net</span>
+                        <span className="hidden sm:inline">Net Premium × 0.9 (10% standard rule)</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="sm:hidden">Not applicable</span>
+                        <span className="hidden sm:inline">Not applicable before 21 Aug 2026</span>
+                      </>
+                    )}
                   </TableCell>
 
                   <TableCell className="py-2.5 px-3 text-right font-mono text-rose-400">

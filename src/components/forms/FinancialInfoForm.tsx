@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/table';
 
 interface FormData {
+  paymentDate: string;
   premium: string;
   netPremium: string;
   discountOffer: string;
@@ -39,8 +40,6 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
     if (field === 'discountOfferType' && (value === 'None' || value === 'none')) {
       updateData({ discountOffer: '0' });
       setDiscountType('none');
-    } else if (field === 'discountOfferType' && value !== 'None' && value !== 'none') {
-      setDiscountType('percentage');
     }
   };
 
@@ -48,10 +47,17 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
   React.useEffect(() => {
     if (data.discountOfferType === 'None' || data.discountOfferType === 'none') {
       setDiscountType('none');
-    } else if (data.discountOfferType) {
-      setDiscountType('percentage');
     }
   }, [data.discountOfferType]);
+
+  const selectDiscountMode = (mode: 'percentage' | 'fixed') => {
+    const nextOfferType = data.discountOfferType === 'Instant PayU'
+      ? 'Cashback'
+      : 'Instant PayU';
+
+    setDiscountType(mode);
+    updateData({ discountOfferType: nextOfferType });
+  };
 
   const tenureOptions = [
     "1 Year", "2 Years", "3 Years"
@@ -72,10 +78,27 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
       const netAmount = parseFloat(data.netPremium) || 0;
       const baseAmount = parseFloat(data.premium) || 0;
 
-      // 1. Apply 90% rule after net premium
-      let currentAmount = netAmount * 0.9;
+      // 1. Apply the date-specific calculation order.
+      const [day, month, year] = data.paymentDate.split('/').map(Number);
+      const parsedPaymentDate = data.paymentDate.includes('/')
+        ? new Date(year, month - 1, day)
+        : new Date(data.paymentDate);
+      const ninetyPercentRuleStart = new Date(2026, 7, 21);
+      const ninetyPercentBeforeDiscountEnd = new Date(2026, 8, 24);
+      const isNinetyPercentRuleApplicable =
+        !data.paymentDate || parsedPaymentDate >= ninetyPercentRuleStart;
+      const isNinetyPercentAfterDiscount =
+        data.paymentDate &&
+        parsedPaymentDate >= ninetyPercentRuleStart &&
+        parsedPaymentDate < ninetyPercentBeforeDiscountEnd;
+      let currentAmount = netAmount;
 
-      // 2. Apply tenure-based percentage
+      // 2. Apply 90% before tenure for the current calculation order.
+      if (isNinetyPercentRuleApplicable && !isNinetyPercentAfterDiscount) {
+        currentAmount *= 0.9;
+      }
+
+      // 3. Apply tenure-based percentage
       if (data.tenure === "1 Year") {
         currentAmount = currentAmount * 1.0; // 100%
       } else if (data.tenure === "2 Years") {
@@ -84,7 +107,7 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
         currentAmount = currentAmount * 0.8; // 80%
       }
 
-      // 3. Apply discount if available
+      // 4. Apply discount if available
       if (data.discountOffer && discountType !== 'none' && data.discountOfferType !== 'None' && data.discountOfferType !== 'none') {
         const discountValue = parseFloat(data.discountOffer) || 0;
         let discountAmount = 0;
@@ -100,9 +123,14 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
         currentAmount = currentAmount - discountAmount;
       }
 
+      // 5. Between 21 Aug and 23 Sep 2026, 90% is applied after discount.
+      if (isNinetyPercentAfterDiscount) {
+        currentAmount *= 0.9;
+      }
+
       updateData({ updatedPremium: Math.max(0, currentAmount).toFixed(2) });
     }
-  }, [data.netPremium, data.discountOffer, data.tenure, data.premium, discountType, updateData]);
+  }, [data.netPremium, data.discountOffer, data.tenure, data.premium, data.paymentDate, discountType, updateData]);
 
   return (
     <div className="space-y-6 animate-slide-in" style={{ background: 'transparent' }}>
@@ -216,7 +244,7 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
                   type="button"
                   variant={discountType === 'percentage' ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setDiscountType('percentage')}
+                  onClick={() => selectDiscountMode('percentage')}
                   className="flex items-center gap-1"
                 >
                   <Percent className="w-3 h-3" />
@@ -226,7 +254,7 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
                   type="button"
                   variant={discountType === 'fixed' ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setDiscountType('fixed')}
+                  onClick={() => selectDiscountMode('fixed')}
                   className="flex items-center gap-1"
                 >
                   <IndianRupee className="w-3 h-3" />
@@ -297,8 +325,18 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
         const netAmount = parseFloat(data.netPremium) || (baseAmount > 0 ? baseAmount / 1.18 : 0);
         const netDiff = baseAmount > 0 ? baseAmount - netAmount : 0;
 
-        const amountAfter90 = netAmount * 0.9;
-        const diff90 = netAmount - amountAfter90;
+        const [day, month, year] = data.paymentDate.split('/').map(Number);
+        const parsedPaymentDate = data.paymentDate.includes('/')
+          ? new Date(year, month - 1, day)
+          : new Date(data.paymentDate);
+        const ninetyPercentRuleStart = new Date(2026, 7, 21);
+        const ninetyPercentBeforeDiscountEnd = new Date(2026, 8, 24);
+        const isNinetyPercentRuleApplicable =
+          !data.paymentDate || parsedPaymentDate >= ninetyPercentRuleStart;
+        const isNinetyPercentAfterDiscount =
+          data.paymentDate &&
+          parsedPaymentDate >= ninetyPercentRuleStart &&
+          parsedPaymentDate < ninetyPercentBeforeDiscountEnd;
 
         let tenureMultiplier = 1.0;
         let tenureText = "100%";
@@ -309,8 +347,13 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
           tenureMultiplier = 0.8;
           tenureText = "80% (20% off)";
         }
-        const amountAfterTenure = amountAfter90 * tenureMultiplier;
-        const tenureDiff = amountAfter90 - amountAfterTenure;
+        const amountBeforeTenure = isNinetyPercentAfterDiscount
+          ? netAmount
+          : isNinetyPercentRuleApplicable
+            ? netAmount * 0.9
+            : netAmount;
+        const amountAfterTenure = amountBeforeTenure * tenureMultiplier;
+        const tenureDiff = amountBeforeTenure - amountAfterTenure;
 
         let discountAmount = 0;
         let discountDetail = "None (₹0)";
@@ -324,7 +367,20 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
             discountDetail = `₹${discountVal} × 5`;
           }
         }
-        const finalCalculatedAmount = Math.max(0, amountAfterTenure - discountAmount);
+        const amountAfterDiscount = Math.max(0, amountAfterTenure - discountAmount);
+        const amountAfter90Rule = isNinetyPercentAfterDiscount
+          ? amountAfterDiscount * 0.9
+          : isNinetyPercentRuleApplicable
+            ? netAmount * 0.9
+            : netAmount;
+        const diff90 = isNinetyPercentAfterDiscount
+          ? amountAfterDiscount - amountAfter90Rule
+          : isNinetyPercentRuleApplicable
+            ? netAmount - amountAfter90Rule
+            : 0;
+        const finalCalculatedAmount = isNinetyPercentAfterDiscount
+          ? amountAfter90Rule
+          : amountAfterDiscount;
 
         return (
           <div className="border border-info/20 rounded-lg p-4 space-y-3" style={{ background: 'transparent' }}>
@@ -363,14 +419,18 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
                   </TableRow>
 
                   {/* 3. 90% Rule */}
-                  <TableRow className="border-b border-border/10 hover:bg-muted/10">
+                  {isNinetyPercentRuleApplicable && !isNinetyPercentAfterDiscount && <TableRow className="border-b border-border/10 hover:bg-muted/10">
                     <TableCell className="py-2 px-3 font-medium">90% Rule</TableCell>
-                    <TableCell className="py-2 px-3 text-muted-foreground">Net Premium × 0.9</TableCell>
+                    <TableCell className="py-2 px-3 text-muted-foreground">
+                      {isNinetyPercentRuleApplicable
+                        ? 'Net Premium × 0.9'
+                        : 'Not applicable before 21 Aug 2026'}
+                    </TableCell>
                     <TableCell className="py-2 px-3 text-right font-mono text-rose-400">
                       {diff90 > 0 ? `-₹${diff90.toFixed(2)}` : '₹0.00'}
                     </TableCell>
-                    <TableCell className="py-2 px-3 text-right font-mono font-medium">₹{amountAfter90.toFixed(2)}</TableCell>
-                  </TableRow>
+                    <TableCell className="py-2 px-3 text-right font-mono font-medium">₹{amountAfter90Rule.toFixed(2)}</TableCell>
+                  </TableRow>}
 
                   {/* 4. Tenure Rate */}
                   <TableRow className="border-b border-border/10 hover:bg-muted/10">
@@ -389,8 +449,17 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
                     <TableCell className="py-2 px-3 text-right font-mono text-rose-400">
                       {discountAmount > 0 ? `-₹${discountAmount.toFixed(2)}` : '₹0.00'}
                     </TableCell>
-                    <TableCell className="py-2 px-3 text-right font-mono font-medium">₹{finalCalculatedAmount.toFixed(2)}</TableCell>
+                    <TableCell className="py-2 px-3 text-right font-mono font-medium">₹{amountAfterDiscount.toFixed(2)}</TableCell>
                   </TableRow>
+
+                  {isNinetyPercentAfterDiscount && <TableRow className="border-b border-border/10 hover:bg-muted/10">
+                    <TableCell className="py-2 px-3 font-medium">90% Rule</TableCell>
+                    <TableCell className="py-2 px-3 text-muted-foreground">After discount × 0.9</TableCell>
+                    <TableCell className="py-2 px-3 text-right font-mono text-rose-400">
+                      {diff90 > 0 ? `-₹${diff90.toFixed(2)}` : '₹0.00'}
+                    </TableCell>
+                    <TableCell className="py-2 px-3 text-right font-mono font-medium">₹{amountAfter90Rule.toFixed(2)}</TableCell>
+                  </TableRow>}
 
                   {/* Final Row */}
                   <TableRow className="bg-info/10 font-bold border-t border-info/30">

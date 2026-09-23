@@ -6,7 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { TwinklingStars } from '@/components/TwinklingStars';
 import { MeteorShower } from '@/components/MeteorShower';
 import { supabase } from '@/lib/supabase';
-import { clearSession, createSession } from '@/lib/sessionManager';
+import { clearSession, createSession, hasSession, updateSession } from '@/lib/sessionManager';
 
 interface FormData {
   policyHolderName: string;
@@ -58,6 +58,17 @@ export default function BookingConfirmation() {
   const [currentBookingId, setCurrentBookingId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [invalidFields, setInvalidFields] = useState<string[]>([]);
+
+  const requiredFields: Array<keyof FormData> = [
+    'policyHolderName', 'contactNo', 'email', 'numberOfMembers', 'pincode',
+    'city', 'district', 'state', 'paymentDate', 'paymentMonth',
+    'effectiveDate', 'nextRenewalDate', 'insuranceCompany', 'planName',
+    'policyType', 'healthCheckup', 'tenure', 'premium', 'netPremium',
+    'updatedPremium', 'employeeName', 'team', 'previousCompany', 'businessType',
+    'extraBonus', 'relationshipManager', 'agentCode', 'grade', 'leadSource',
+    'proposalNo', 'paymentProof'
+  ];
 
   // Generate 8-digit alphanumeric ID
   const generateBookingId = () => {
@@ -173,6 +184,23 @@ export default function BookingConfirmation() {
   const handleConfirm = async () => {
     if (!formData) return;
 
+    const missingFields = requiredFields.filter((field) => {
+      const value = formData[field];
+      return typeof value !== 'string' || value.trim() === '';
+    });
+
+    if (missingFields.length > 0) {
+      setInvalidFields(missingFields);
+      toast({
+        title: 'Required fields missing',
+        description: `Please fill ${missingFields.length} highlighted field${missingFields.length === 1 ? '' : 's'} before submitting.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setInvalidFields([]);
+
     // If we already have a booking ID from URL, we're just viewing, skip confirmation
     if (currentBookingId) {
       toast({
@@ -233,6 +261,9 @@ export default function BookingConfirmation() {
         throw error;
       }
 
+      // The booking is persisted successfully; only now can the form session reset.
+      clearSession();
+
       // Sync to Google Sheets directly via Google Apps Script
       try {
         const googleScriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
@@ -292,9 +323,6 @@ export default function BookingConfirmation() {
         // Don't fail the whole process if sync fails
       }
 
-      // Clear session storage using session manager
-      clearSession();
-
       // Set booking ID and show success modal
       setCurrentBookingId(newBookingId);
       setShowSuccessModal(true);
@@ -312,11 +340,27 @@ export default function BookingConfirmation() {
   };
 
   const handleBack = () => {
+    if (formData) {
+      if (!hasSession()) {
+        createSession(formData);
+      }
+      updateSession({
+        formData,
+        currentStep: 5,
+        currentStepSlug: 'business-information',
+        showWelcome: false,
+        showBusinessTypeSelect: false,
+        showCompanySelect: false,
+        showProposalWidget: false,
+      });
+    }
+
     // Navigate back with form data and current step state
-    navigate('/', {
+    navigate('/?step=business-information', {
       state: {
         formData: formData,
-        returnFromConfirmation: true
+        returnFromConfirmation: true,
+        returnStep: 5
       }
     });
   };
@@ -748,6 +792,7 @@ export default function BookingConfirmation() {
               onConfirm={handleConfirm}
               onBack={handleBack}
               isSubmitting={isSubmitting}
+                  invalidFields={invalidFields}
             />
           </div>
         </div>

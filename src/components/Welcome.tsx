@@ -3,6 +3,12 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Calculator } from 'lucide-react';
 
+interface SessionPreview {
+  policyHolderName?: string;
+  paymentDate?: string;
+  premium?: string;
+}
+
 interface WelcomeProps {
   showGreeting: boolean;
   hideGreeting: boolean;
@@ -10,9 +16,12 @@ interface WelcomeProps {
   onStart: () => void;
   onUpdateBooking: () => void;
   onPremiumConversion: () => void;
+  sessionPreview?: SessionPreview | null;
+  onRestoreSession?: () => void;
+  onCreateNewSession?: () => void;
 }
 
-export function Welcome({ showGreeting, hideGreeting, showButtons, onStart, onUpdateBooking, onPremiumConversion }: WelcomeProps) {
+export function Welcome({ showGreeting, hideGreeting, showButtons, onStart, onUpdateBooking, onPremiumConversion, sessionPreview, onRestoreSession, onCreateNewSession }: WelcomeProps) {
   return (
     <div className="flex items-center justify-center min-h-screen" style={{ padding: '0 16px' }}>
       <div className="text-center animate-fade-in-up" style={{
@@ -167,6 +176,29 @@ export function Welcome({ showGreeting, hideGreeting, showButtons, onStart, onUp
             Complete your insurance payment booking in simple, easy steps
           </p>
         </div>
+
+        {sessionPreview && onRestoreSession && onCreateNewSession && (
+          <div
+            className="mt-5 w-full max-w-[540px] rounded-xl border border-cyan-400/20 bg-white/[0.06] p-4 text-left backdrop-blur-md"
+            style={{
+              opacity: showGreeting && !hideGreeting ? 1 : 0,
+              transform: showGreeting && !hideGreeting ? 'translateY(0)' : 'translateY(12px)',
+              transition: 'opacity 0.8s ease, transform 0.8s ease',
+              pointerEvents: showGreeting && !hideGreeting ? 'auto' : 'none'
+            }}
+          >
+            <p className="text-sm font-semibold text-white">Resume your saved booking?</p>
+            <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-white/70 sm:grid-cols-3">
+              <div><span className="block text-white/40">Proposer</span>{sessionPreview.policyHolderName || 'Not entered'}</div>
+              <div><span className="block text-white/40">Payment Date</span>{sessionPreview.paymentDate || 'Not entered'}</div>
+              <div><span className="block text-white/40">Premium</span>{sessionPreview.premium ? `₹${sessionPreview.premium}` : 'Not entered'}</div>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Button onClick={onRestoreSession} className="flex-1 bg-cyan-500 text-black hover:bg-cyan-400">Restore Session</Button>
+              <Button onClick={onCreateNewSession} variant="outline" className="flex-1 border-red-400/30 text-red-300 hover:bg-red-400/10">Remove</Button>
+            </div>
+          </div>
+        )}
 
         {/* Action Buttons - Show after greeting animation */}
         <div style={{
