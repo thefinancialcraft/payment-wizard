@@ -47,6 +47,7 @@ export function BusinessInfoForm({ data, updateData, paymentMonth, insuranceComp
   const [customManager, setCustomManager] = useState('');
   const [customAgentCode, setCustomAgentCode] = useState('');
   const [showCustomManagerInput, setShowCustomManagerInput] = useState(false);
+  const [isSavingCustomManager, setIsSavingCustomManager] = useState(false);
   const [faveoData, setFaveoData] = useState<any[]>([]);
   const [isLoadingFaveoData, setIsLoadingFaveoData] = useState(false);
   const [showProposalDropdown, setShowProposalDropdown] = useState(false);
@@ -122,32 +123,66 @@ export function BusinessInfoForm({ data, updateData, paymentMonth, insuranceComp
   };
 
   const handleSaveCustomManager = async () => {
-    if (customManager.trim() && customAgentCode.trim()) {
-      // Add to local state
-      setRelationshipManagers([...relationshipManagers, customManager]);
-      handleChange('relationshipManager', customManager);
-      handleChange('agentCode', customAgentCode);
-      setShowCustomManagerInput(false);
-      setCustomManager('');
-      setCustomAgentCode('');
+    const managerName = customManager.trim();
+    const managerCode = customAgentCode.trim();
 
-      // Insert into database
-      try {
-        const { error } = await supabase
+    if (!managerName || isSavingCustomManager) {
+      return;
+    }
+
+    const finalAgentCode = managerCode || managerName;
+    setIsSavingCustomManager(true);
+
+    try {
+      const { data: existingAgent, error: fetchError } = await supabase
+        .from('agent_codes')
+        .select('agent_id, agent_name')
+        .eq('agent_name', managerName)
+        .maybeSingle();
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      if (existingAgent) {
+        const { error: updateError } = await supabase
+          .from('agent_codes')
+          .update({
+            agent_id: finalAgentCode,
+            agent_name: managerName,
+            agent_password: '',
+            agent_otp_finder: ''
+          })
+          .eq('agent_name', managerName);
+
+        if (updateError) {
+          throw updateError;
+        }
+      } else {
+        const { error: insertError } = await supabase
           .from('agent_codes')
           .insert({
-            agent_id: customAgentCode,
-            agent_name: customManager,
+            agent_id: finalAgentCode,
+            agent_name: managerName,
             agent_password: '',
             agent_otp_finder: ''
           });
 
-        if (error) {
-          console.error('Error inserting manager:', error);
+        if (insertError) {
+          throw insertError;
         }
-      } catch (error) {
-        console.error('Error inserting manager:', error);
       }
+
+      setRelationshipManagers((prev) => Array.from(new Set([...prev, managerName])));
+      handleChange('relationshipManager', managerName);
+      handleChange('agentCode', finalAgentCode);
+      setShowCustomManagerInput(false);
+      setCustomManager('');
+      setCustomAgentCode('');
+    } catch (error) {
+      console.error('Error saving manager to agent_codes:', error);
+    } finally {
+      setIsSavingCustomManager(false);
     }
   };
 
@@ -629,14 +664,23 @@ export function BusinessInfoForm({ data, updateData, paymentMonth, insuranceComp
                   <button
                     type="button"
                     onClick={handleSaveCustomManager}
-                    className="text-xs bg-primary text-primary-foreground px-3 py-1 rounded hover:bg-primary/90 transition-colors"
+                    disabled={isSavingCustomManager}
+                    className="text-xs bg-primary text-primary-foreground px-3 py-1 rounded hover:bg-primary/90 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center min-w-[110px]"
                   >
-                    Add to list
+                    {isSavingCustomManager ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Add to list'
+                    )}
                   </button>
                   <button
                     type="button"
                     onClick={() => {setShowCustomManagerInput(false); setCustomManager(''); setCustomAgentCode('');}}
                     className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                    disabled={isSavingCustomManager}
                   >
                     Cancel
                   </button>
