@@ -669,7 +669,9 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
       effectiveDate: proposalData.policy_start_date || formData.effectiveDate,
       planName: proposalData.plan || formData.planName,
       policyType: proposalData.business_type || formData.policyType,
-      premium: proposalData.payment_amount || formData.premium,
+      premium: proposalData.payment_amount != null
+        ? String(proposalData.payment_amount)
+        : formData.premium,
       relationshipManager: proposalData.agent_name || formData.relationshipManager
     };
 
