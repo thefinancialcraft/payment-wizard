@@ -12,11 +12,19 @@ function normalizeHeader(value) {
 
 function buildLookup(data) {
   const lookup = {};
-  const source = data && typeof data === 'object' ? data : {};
 
-  Object.keys(source).forEach((key) => {
-    lookup[normalizeHeader(key)] = source[key];
-  });
+  if (Array.isArray(data)) {
+    data.forEach((field) => {
+      if (field && typeof field === 'object' && field.header !== undefined) {
+        lookup[normalizeHeader(field.header)] = field.value;
+      }
+    });
+  } else {
+    const source = data && typeof data === 'object' ? data : {};
+    Object.keys(source).forEach((key) => {
+      lookup[normalizeHeader(key)] = source[key];
+    });
+  }
 
   if (lookup.payement_mode !== undefined && lookup.payment_mode === undefined) {
     lookup.payment_mode = lookup.payement_mode;
@@ -129,7 +137,9 @@ function doPost(e) {
       }
     }
 
-    const data = Array.isArray(payload) ? (payload[0] || {}) : payload;
+    const data = payload && Array.isArray(payload.fields)
+      ? payload.fields
+      : Array.isArray(payload) ? (payload[0] || {}) : payload;
 
     const spreadsheetId = '1qzxbyavzNWD9x-hG5y6cNFZlMEMyubOR-JAN5-spWiA';
     const sheetName = 'supabase_response';

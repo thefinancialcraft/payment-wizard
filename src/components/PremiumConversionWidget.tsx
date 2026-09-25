@@ -108,31 +108,11 @@ export function PremiumConversionWidget({
     parsedPaymentDate !== undefined &&
     parsedPaymentDate >= ninetyPercentBeforeDiscountStart &&
     parsedPaymentDate < ninetyPercentBeforeDiscountEnd;
-  const tenureRuleEnd = new Date(2026, 8, 8);
-  const isTenureRuleApplicable =
-    !parsedPaymentDate || parsedPaymentDate <= tenureRuleEnd;
-
-  // 3. Tenure Rate
-  let tenureMultiplier = 1.0;
-  let tenureText = '100%';
-
-  if (isTenureRuleApplicable && tenure === '2 Years') {
-    tenureMultiplier = 0.9;
-    tenureText = '90% (10% off)';
-  } else if (isTenureRuleApplicable && tenure === '3 Years') {
-    tenureMultiplier = 0.8;
-    tenureText = '80% (20% off)';
-  } else if (!isTenureRuleApplicable) {
-    tenureText = 'Not applicable after 8 Sep 2026';
-  }
-
   const amountBeforeTenure = isNinetyPercentAfterDiscount
     ? netAmount
     : isNinetyPercentRuleApplicable
       ? netAmount * 0.9
       : netAmount;
-  const amountAfterTenure = amountBeforeTenure * tenureMultiplier;
-  const tenureDiff = amountBeforeTenure - amountAfterTenure;
 
   // 4. Discount
   let discountAmount = 0;
@@ -157,7 +137,7 @@ export function PremiumConversionWidget({
     }
   }
 
-  const amountAfterDiscount = Math.max(0, amountAfterTenure - discountAmount);
+  const amountAfterDiscount = Math.max(0, amountBeforeTenure - discountAmount);
   const amountAfter90 = isNinetyPercentAfterDiscount
     ? amountAfterDiscount * 0.9
     : amountAfterDiscount;
@@ -197,7 +177,7 @@ export function PremiumConversionWidget({
 • Base Premium: ₹${baseAmount.toFixed(2)}
 • Net Premium: ₹${netAmount.toFixed(2)} (Base ÷ 1.18)
 • 90% Rule: ₹${amountAfter90.toFixed(2)} (Net × 0.9)
-• Tenure Rate (${tenure}): ₹${amountAfterTenure.toFixed(2)} (${tenureText})
+• Policy Tenure: ${tenure}
 • Discount: ₹${discountAmount.toFixed(2)} (${discountDetail})
 • Total Savings: ₹${totalSavings.toFixed(2)}
 • Final Amount: ₹${finalAmount.toFixed(2)}`;
@@ -472,22 +452,21 @@ export function PremiumConversionWidget({
                   "
                 >
                   <SelectItem value="1 Year">
-                    1 Year (100% Rate)
+                    1 Year
                   </SelectItem>
 
                   <SelectItem value="2 Years">
-                    2 Years (90% Rate)
+                    2 Years
                   </SelectItem>
 
                   <SelectItem value="3 Years">
-                    3 Years (80% Rate)
+                    3 Years
                   </SelectItem>
                 </SelectContent>
               </Select>
 
               <span className="text-[11px] text-white/35 block">
-                <span className="sm:hidden">After 90% rule</span>
-                <span className="hidden sm:inline">Multiplier applied after 90% rule</span>
+                Tenure is passed to the booking details
               </span>
 
             </CardContent>
@@ -975,38 +954,13 @@ export function PremiumConversionWidget({
 
                 </TableRow>
 
-                {/* 4 TENURE */}
-
-                <TableRow className="border-b border-white/[0.045] hover:bg-white/[0.015]">
-
-                  <TableCell className="py-2.5 px-3 font-medium text-white">
-                    4. Tenure Rate ({tenure})
-                  </TableCell>
-
-                  <TableCell className="py-2.5 px-3 text-white/50">
-                    <span className="sm:hidden">{tenureText}</span>
-                    <span className="hidden sm:inline">{tenureText} applied on 90% amount</span>
-                  </TableCell>
-
-                  <TableCell className="py-2.5 px-3 text-right font-mono text-rose-400">
-                    {tenureDiff > 0
-                      ? `-₹${tenureDiff.toFixed(2)}`
-                      : '₹0.00'}
-                  </TableCell>
-
-                  <TableCell className="py-2.5 px-3 text-right font-mono font-medium text-white">
-                    ₹{amountAfterTenure.toFixed(2)}
-                  </TableCell>
-
-                </TableRow>
-
-                {/* 5 DISCOUNT */}
+                {/* 4 DISCOUNT */}
 
                 <TableRow className="border-b border-white/[0.045] hover:bg-white/[0.015]">
 
                   <TableCell className="py-2.5 px-3 font-medium text-white">
 
-                    5. Discount (
+                    4. Discount (
                     {discountType === 'none'
                       ? 'None'
                       : discountType === 'percentage'
