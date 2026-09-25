@@ -387,29 +387,27 @@ export function InsuranceDetailsForm({ data, updateData, disabledFields = [] }: 
           </CardContent>
         </Card>
 
-        {data.insuranceCompany === "Care Health Insurance" && (
-          <Card className="hover:shadow-card transition-all duration-300" style={{ background: 'transparent', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-            <CardContent className="p-4" style={{ background: 'transparent' }}>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                  <Gift className="w-4 h-4 text-primary" />
-                </div>
-                <Label htmlFor="extraBonus" className="text-sm font-medium">
-                  Extra Bonus (Super/Booster/Infinity)
-                </Label>
+        <Card className="hover:shadow-card transition-all duration-300" style={{ background: 'transparent', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+          <CardContent className="p-4" style={{ background: 'transparent' }}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                <Gift className="w-4 h-4 text-primary" />
               </div>
-              <Select value={data.extraBonus} onValueChange={(value) => handleChange('extraBonus', value)}>
-                <SelectTrigger className="border-border/20 focus:border-primary">
-                  <SelectValue placeholder="Select extra bonus option" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="yes">Yes</SelectItem>
-                  <SelectItem value="no">No</SelectItem>
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
-        )}
+              <Label htmlFor="extraBonus" className="text-sm font-medium">
+                Extra Bonus (Super/Booster/Infinity)
+              </Label>
+            </div>
+            <Select value={data.extraBonus} onValueChange={(value) => handleChange('extraBonus', value)}>
+              <SelectTrigger className="border-border/20 focus:border-primary">
+                <SelectValue placeholder="Select extra bonus option" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="yes">Yes</SelectItem>
+                <SelectItem value="no">No</SelectItem>
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
       </div>
       
       <div className="border border-success/20 rounded-lg p-4" style={{ background: 'transparent' }}>
