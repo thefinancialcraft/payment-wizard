@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { TwinklingStars } from '@/components/TwinklingStars';
 import { MeteorShower } from '@/components/MeteorShower';
 import { supabase } from '@/lib/supabase';
+import { syncBookingToGoogleSheet } from '@/lib/googleSheetsSync';
 import { clearSession, createSession, hasSession, updateSession } from '@/lib/sessionManager';
 
 interface FormData {
@@ -266,6 +267,50 @@ export default function BookingConfirmation() {
       if (error) {
         throw error;
       }
+
+      const googleSheetPayload = {
+        booking_id: newBookingId,
+        policy_holder_name: formData.policyHolderName,
+        contact_no: formData.contactNo,
+        email: formData.email,
+        number_of_members: formData.numberOfMembers,
+        pincode: formData.pincode,
+        city: formData.city,
+        district: formData.district,
+        state: formData.state,
+        country: formData.country,
+        payment_date: formData.paymentDate,
+        payment_month: formData.paymentMonth,
+        effective_date: formData.effectiveDate,
+        next_renewal_date: formData.nextRenewalDate,
+        month: formData.month,
+        insurance_company: formData.insuranceCompany,
+        plan_name: formData.planName,
+        policy_type: formData.policyType,
+        health_checkup: formData.healthCheckup,
+        extra_bonus: formData.extraBonus,
+        tenure: formData.tenure,
+        premium: formData.premium,
+        net_premium: formData.netPremium,
+        discount_offer: formData.discountOffer,
+        discount_offer_type: formData.discountOfferType,
+        updated_premium: formData.updatedPremium,
+        employee_name: formData.employeeName,
+        team: formData.team,
+        previous_company: formData.previousCompany,
+        business_type: formData.businessType,
+        payment_mode: formData.paymentMode || 'Direct Link',
+        assistant_team: formData.assistantTeam,
+        relationship_manager: formData.relationshipManager,
+        agent_code: formData.agentCode,
+        proposal_no: formData.proposalNo,
+        grade: formData.grade,
+        lead_source: formData.leadSource,
+        payment_proof: formData.paymentProof,
+        created_at: new Date().toISOString(),
+      };
+
+      await syncBookingToGoogleSheet(googleSheetPayload);
 
       // The booking is persisted successfully; only now can the form session reset.
       clearSession();

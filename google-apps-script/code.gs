@@ -31,7 +31,7 @@ function buildLookup(data) {
 function resolveField(dataLookup, headerName) {
   const normalized = normalizeHeader(headerName);
   const aliasMap = {
-    booking_id: ['booking_id'],
+    booking_id: ['booking_id', 'booking_code'],
     policy_holder_name: ['policy_holder_name', 'policyholder_name', 'policyholdername'],
     contact_no: ['contact_no', 'contactnumber', 'mobile_no', 'mobile'],
     email: ['email'],
@@ -101,9 +101,34 @@ function formatDateAsText(value) {
   return text;
 }
 
+function findRowIndexByBookingId(sheet, bookingId) {
+  const values = sheet.getDataRange().getValues();
+
+  for (let rowIndex = 1; rowIndex < values.length; rowIndex++) {
+    const row = values[rowIndex];
+    const cellValue = row[0];
+    if (String(cellValue || '').trim() === String(bookingId || '').trim()) {
+      return rowIndex + 1;
+    }
+  }
+
+  return null;
+}
+
 function doPost(e) {
   try {
-    const payload = e && e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : {};
+    const rawBody = e && e.postData && e.postData.contents ? e.postData.contents : '{}';
+    let payload = {};
+
+    try {
+      payload = JSON.parse(rawBody);
+    } catch (_) {
+      const match = String(rawBody).match(/^data=(.*)$/);
+      if (match && match[1]) {
+        payload = JSON.parse(decodeURIComponent(match[1]));
+      }
+    }
+
     const data = Array.isArray(payload) ? (payload[0] || {}) : payload;
 
     const spreadsheetId = '1qzxbyavzNWD9x-hG5y6cNFZlMEMyubOR-JAN5-spWiA';
@@ -144,23 +169,24 @@ function doPost(e) {
       return value === undefined || value === null ? '' : value;
     });
 
-    const lastRow = sheet.getLastRow();
-    const nextRow = lastRow + 1;
+    const bookingId = String(resolveField(dataLookup, 'booking_id') || '').trim();
+    const existingRowIndex = bookingId ? findRowIndexByBookingId(sheet, bookingId) : null;
+    const targetRowIndex = existingRowIndex || sheet.getLastRow() + 1;
 
     headers.forEach((header, index) => {
       const normalized = normalizeHeader(header);
       if (['payment_date', 'effective_date', 'next_renewal_date', 'created_at'].includes(normalized)) {
-        sheet.getRange(nextRow, index + 1).setNumberFormat('@');
+        sheet.getRange(targetRowIndex, index + 1).setNumberFormat('@');
       }
     });
 
-    sheet.getRange(nextRow, 1, 1, rowData.length).setValues([rowData]);
+    sheet.getRange(targetRowIndex, 1, 1, rowData.length).setValues([rowData]);
     sheet.autoResizeColumns(1, rowData.length);
 
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
-      message: 'Row added successfully',
-      row: nextRow,
+      message: existingRowIndex ? 'Row updated successfully' : 'Row added successfully',
+      row: targetRowIndex,
       headers: headers
     })).setMimeType(ContentService.MimeType.JSON);
 

@@ -16,13 +16,15 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Fetch all rows from payment_bookings table in Supabase
+    // Fetch the latest booking row from payment_bookings table in Supabase
     const { data: rows, error: dbError }: {
       data: Array<Record<string, any>> | null;
       error: { message: string } | null;
     } = await supabase
       .from('payment_bookings')
-      .select('*');
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1);
 
     if (dbError) {
       throw new Error(`Database Error: ${dbError.message}`);
@@ -35,22 +37,20 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Forward all rows to Google Sheets, ensuring the payment mode column is included
-    const rowsToSync: Array<Record<string, any>> = rows.map((row: Record<string, any>) => ({
-      ...row,
-      payment_mode: row.payment_mode ?? '',
-    }));
-
-    const encodedData = 'data=' + encodeURIComponent(JSON.stringify(rowsToSync));
+    const latestRow: Record<string, any> = {
+      ...rows[0],
+      booking_id: rows[0].booking_code ?? rows[0].booking_id ?? '',
+      payment_mode: rows[0].payment_mode ?? '',
+    };
 
     const response = await fetch('https://script.google.com/macros/s/AKfycbx1Ef6djSfs8Xfb_adXOEvEZQg2Lfb0DiPFVhuz5I5Y_yI1hujfaw2M0GekcMaqHAZR/exec', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: encodedData
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(latestRow)
     });
 
     const text = await response.text();
-    return new Response(JSON.stringify({ message: "Sync successful", googleResponse: text, rowsCount: rows.length }), {
+    return new Response(JSON.stringify({ message: "Latest booking sync successful", googleResponse: text, rowsCount: 1 }), {
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*'
