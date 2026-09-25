@@ -108,17 +108,22 @@ export function PremiumConversionWidget({
     parsedPaymentDate !== undefined &&
     parsedPaymentDate >= ninetyPercentBeforeDiscountStart &&
     parsedPaymentDate < ninetyPercentBeforeDiscountEnd;
+  const tenureRuleEnd = new Date(2026, 8, 9);
+  const isTenureRuleApplicable =
+    !parsedPaymentDate || parsedPaymentDate <= tenureRuleEnd;
 
   // 3. Tenure Rate
   let tenureMultiplier = 1.0;
   let tenureText = '100%';
 
-  if (tenure === '2 Years') {
+  if (isTenureRuleApplicable && tenure === '2 Years') {
     tenureMultiplier = 0.9;
     tenureText = '90% (10% off)';
-  } else if (tenure === '3 Years') {
+  } else if (isTenureRuleApplicable && tenure === '3 Years') {
     tenureMultiplier = 0.8;
     tenureText = '80% (20% off)';
+  } else if (!isTenureRuleApplicable) {
+    tenureText = 'Not applicable after 9 Sep 2026';
   }
 
   const amountBeforeTenure = isNinetyPercentAfterDiscount

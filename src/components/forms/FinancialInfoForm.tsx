@@ -85,12 +85,15 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
         : new Date(data.paymentDate);
       const ninetyPercentRuleStart = new Date(2026, 7, 21);
       const ninetyPercentBeforeDiscountEnd = new Date(2026, 8, 24);
+      const tenureRuleEnd = new Date(2026, 8, 9);
       const isNinetyPercentRuleApplicable =
         !data.paymentDate || parsedPaymentDate >= ninetyPercentRuleStart;
       const isNinetyPercentAfterDiscount =
         data.paymentDate &&
         parsedPaymentDate >= ninetyPercentRuleStart &&
         parsedPaymentDate < ninetyPercentBeforeDiscountEnd;
+      const isTenureRuleApplicable =
+        !data.paymentDate || parsedPaymentDate <= tenureRuleEnd;
       let currentAmount = netAmount;
 
       // 2. Apply 90% before tenure for the current calculation order.
@@ -99,7 +102,7 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
       }
 
       // 3. Apply tenure-based percentage
-      if (data.tenure === "1 Year") {
+      if (!isTenureRuleApplicable || data.tenure === "1 Year") {
         currentAmount = currentAmount * 1.0; // 100%
       } else if (data.tenure === "2 Years") {
         currentAmount = currentAmount * 0.9; // 90%
@@ -331,21 +334,26 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
           : new Date(data.paymentDate);
         const ninetyPercentRuleStart = new Date(2026, 7, 21);
         const ninetyPercentBeforeDiscountEnd = new Date(2026, 8, 24);
+        const tenureRuleEnd = new Date(2026, 8, 9);
         const isNinetyPercentRuleApplicable =
           !data.paymentDate || parsedPaymentDate >= ninetyPercentRuleStart;
         const isNinetyPercentAfterDiscount =
           data.paymentDate &&
           parsedPaymentDate >= ninetyPercentRuleStart &&
           parsedPaymentDate < ninetyPercentBeforeDiscountEnd;
+        const isTenureRuleApplicable =
+          !data.paymentDate || parsedPaymentDate <= tenureRuleEnd;
 
         let tenureMultiplier = 1.0;
         let tenureText = "100%";
-        if (data.tenure === "2 Years") {
+        if (isTenureRuleApplicable && data.tenure === "2 Years") {
           tenureMultiplier = 0.9;
           tenureText = "90% (10% off)";
-        } else if (data.tenure === "3 Years") {
+        } else if (isTenureRuleApplicable && data.tenure === "3 Years") {
           tenureMultiplier = 0.8;
           tenureText = "80% (20% off)";
+        } else if (!isTenureRuleApplicable) {
+          tenureText = "Not applicable after 9 Sep 2026";
         }
         const amountBeforeTenure = isNinetyPercentAfterDiscount
           ? netAmount

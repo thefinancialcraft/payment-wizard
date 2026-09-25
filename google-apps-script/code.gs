@@ -1,6 +1,23 @@
 // Google Apps Script for syncing Supabase bookings to Google Sheets
 // Deploy this as a web app with "Who has access: Anyone"
 
+function formatDateAsText(value) {
+  if (!value) return '';
+
+  const text = String(value).trim();
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+  }
+
+  const slashMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashMatch) {
+    return `${slashMatch[1].padStart(2, '0')}/${slashMatch[2].padStart(2, '0')}/${slashMatch[3]}`;
+  }
+
+  return text;
+}
+
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
@@ -30,10 +47,10 @@ function doPost(e) {
       data.district || '',
       data.state || '',
       data.country || '',
-      data.payment_date || '',
+      formatDateAsText(data.payment_date),
       data.payment_month || '',
-      data.effective_date || '',
-      data.next_renewal_date || '',
+      formatDateAsText(data.effective_date),
+      formatDateAsText(data.next_renewal_date),
       data.month || '',
       data.insurance_company || '',
       data.plan_name || '',
@@ -63,18 +80,15 @@ function doPost(e) {
     // Find the next empty row
     const lastRow = sheet.getLastRow();
     const nextRow = lastRow + 1;
+
+    // Keep date values as text before writing so Sheets cannot reinterpret DD/MM/YYYY.
+    const dateColumns = [11, 13, 14, 38]; // payment_date, effective_date, next_renewal_date, created_at
+    dateColumns.forEach(col => {
+      sheet.getRange(nextRow, col).setNumberFormat('@');
+    });
     
     // Append the row
     sheet.getRange(nextRow, 1, 1, rowData.length).setValues([rowData]);
-    
-    // Format the date columns
-    const dateColumns = [12, 13, 14, 15, 37]; // payment_date, effective_date, next_renewal_date, month, created_at (1-indexed)
-    dateColumns.forEach(col => {
-      if (rowData[col - 1]) {
-        // Keep as text format for Google Sheets to display properly
-        sheet.getRange(nextRow, col).setNumberFormat('@');
-      }
-    });
     
     // Auto-resize columns
     sheet.autoResizeColumns(1, rowData.length);
