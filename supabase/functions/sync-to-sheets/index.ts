@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -20,7 +20,10 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     // Parse the request body
-    const { record, table } = await req.json()
+    const { record, table } = (await req.json()) as {
+      record?: Record<string, any>;
+      table?: string;
+    }
 
     console.log('Received webhook:', { table, record })
 
@@ -74,6 +77,7 @@ serve(async (req) => {
         lead_source: record.lead_source,
         payment_proof: record.payment_proof,
         created_at: record.created_at,
+        payment_mode: record.payment_mode,
       }),
     })
 
@@ -91,10 +95,11 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
-  } catch (error) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
     console.error('Error:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

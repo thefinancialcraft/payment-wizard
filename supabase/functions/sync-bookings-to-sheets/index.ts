@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', {
       headers: {
@@ -17,7 +17,10 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Fetch all rows from payment_bookings table in Supabase
-    const { data: rows, error: dbError } = await supabase
+    const { data: rows, error: dbError }: {
+      data: Array<Record<string, any>> | null;
+      error: { message: string } | null;
+    } = await supabase
       .from('payment_bookings')
       .select('*');
 
@@ -32,8 +35,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Forward all rows to Google Sheets
-    const encodedData = 'data=' + encodeURIComponent(JSON.stringify(rows));
+    // Forward all rows to Google Sheets, ensuring the payment mode column is included
+    const rowsToSync: Array<Record<string, any>> = rows.map((row: Record<string, any>) => ({
+      ...row,
+      payment_mode: row.payment_mode ?? '',
+    }));
+
+    const encodedData = 'data=' + encodeURIComponent(JSON.stringify(rowsToSync));
 
     const response = await fetch('https://script.google.com/macros/s/AKfycbx1Ef6djSfs8Xfb_adXOEvEZQg2Lfb0DiPFVhuz5I5Y_yI1hujfaw2M0GekcMaqHAZR/exec', {
       method: 'POST',
@@ -49,8 +57,9 @@ Deno.serve(async (req) => {
       },
       status: response.status
     });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    return new Response(JSON.stringify({ error: errorMessage }), {
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*'

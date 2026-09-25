@@ -108,7 +108,7 @@ export function PremiumConversionWidget({
     parsedPaymentDate !== undefined &&
     parsedPaymentDate >= ninetyPercentBeforeDiscountStart &&
     parsedPaymentDate < ninetyPercentBeforeDiscountEnd;
-  const tenureRuleEnd = new Date(2026, 8, 9);
+  const tenureRuleEnd = new Date(2026, 8, 8);
   const isTenureRuleApplicable =
     !parsedPaymentDate || parsedPaymentDate <= tenureRuleEnd;
 
@@ -123,7 +123,7 @@ export function PremiumConversionWidget({
     tenureMultiplier = 0.8;
     tenureText = '80% (20% off)';
   } else if (!isTenureRuleApplicable) {
-    tenureText = 'Not applicable after 9 Sep 2026';
+    tenureText = 'Not applicable after 8 Sep 2026';
   }
 
   const amountBeforeTenure = isNinetyPercentAfterDiscount

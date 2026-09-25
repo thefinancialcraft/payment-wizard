@@ -85,7 +85,7 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
         : new Date(data.paymentDate);
       const ninetyPercentRuleStart = new Date(2026, 7, 21);
       const ninetyPercentBeforeDiscountEnd = new Date(2026, 8, 24);
-      const tenureRuleEnd = new Date(2026, 8, 9);
+      const tenureRuleEnd = new Date(2026, 8, 8);
       const isNinetyPercentRuleApplicable =
         !data.paymentDate || parsedPaymentDate >= ninetyPercentRuleStart;
       const isNinetyPercentAfterDiscount =
@@ -353,7 +353,7 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
           tenureMultiplier = 0.8;
           tenureText = "80% (20% off)";
         } else if (!isTenureRuleApplicable) {
-          tenureText = "Not applicable after 9 Sep 2026";
+          tenureText = "Not applicable after 8 Sep 2026";
         }
         const amountBeforeTenure = isNinetyPercentAfterDiscount
           ? netAmount
