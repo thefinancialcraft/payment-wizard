@@ -565,6 +565,7 @@ export function BusinessInfoForm({ data, updateData, paymentMonth, insuranceComp
                       <SelectValue placeholder="Select previous company" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="None">None</SelectItem>
                       {insuranceCompanies.map((company) => (
                         <SelectItem key={company} value={company}>
                           {company}

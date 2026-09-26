@@ -10,6 +10,7 @@ interface FormData {
   insuranceCompany: string;
   planName: string;
   policyType: string;
+  previousCompany: string;
   healthCheckup: string;
   extraBonus: string;
 }
@@ -83,6 +84,17 @@ export function InsuranceDetailsForm({ data, updateData, disabledFields = [] }: 
 
   const handleChange = (field: keyof FormData, value: string) => {
     updateData({ [field]: value });
+  };
+
+  const handlePolicyTypeChange = (value: string) => {
+    updateData({
+      policyType: value,
+      ...(value === 'NEWBUSINESS'
+        ? { previousCompany: 'None' }
+        : data.previousCompany === 'None'
+          ? { previousCompany: '' }
+          : {})
+    });
   };
 
   const handleCompanyChange = (value: string) => {
@@ -348,7 +360,7 @@ export function InsuranceDetailsForm({ data, updateData, disabledFields = [] }: 
             </div>
             <Select
               value={data.policyType}
-              onValueChange={(value) => handleChange('policyType', value)}
+              onValueChange={handlePolicyTypeChange}
               disabled={disabledFields.includes('policyType')}
             >
               <SelectTrigger className="border-border/20 focus:border-primary" style={{ opacity: disabledFields.includes('policyType') ? 0.6 : 1 }}>
