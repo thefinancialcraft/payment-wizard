@@ -291,27 +291,7 @@ export function FinancialInfoForm({ data, updateData, paymentMonth, disabledFiel
               />
             )}
 
-            {/* Agent Eligibility Badges */}
-            {data.employeeName && (
-              <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-border/10 text-xs">
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium ${
-                  isGstEligible
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                    : 'bg-muted/40 text-muted-foreground border border-border/30'
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${isGstEligible ? 'bg-emerald-400' : 'bg-muted-foreground'}`} />
-                  GST Offer: {isGstEligible ? 'Eligible (GST Deducted)' : 'Not Eligible (No GST Off)'}
-                </span>
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium ${
-                  is90WeightageEligible
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                    : 'bg-muted/40 text-muted-foreground border border-border/30'
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${is90WeightageEligible ? 'bg-emerald-400' : 'bg-muted-foreground'}`} />
-                  90% Weightage: {is90WeightageEligible ? 'Eligible (90% Rule ON)' : 'Not Eligible (90% Rule OFF)'}
-                </span>
-              </div>
-            )}
+
           </CardContent>
         </Card>
 
