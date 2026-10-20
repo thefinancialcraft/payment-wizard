@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { IndianRupee, Percent, Calculator, Clock, X } from 'lucide-react';
+import { IndianRupee, Percent, Calculator, Clock, X, UserCheck, Users, Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import {
   Table,
   TableBody,
@@ -15,7 +16,10 @@ import {
 } from '@/components/ui/table';
 
 interface FormData {
+  employeeName?: string;
+  team?: string;
   paymentDate: string;
+  paymentMonth?: string;
   premium: string;
   netPremium: string;
   discountOffer: string;
@@ -27,11 +31,97 @@ interface FormData {
 interface FinancialInfoFormProps {
   data: FormData;
   updateData: (data: Partial<FormData>) => void;
+  paymentMonth?: string;
   disabledFields?: string[];
 }
 
-export function FinancialInfoForm({ data, updateData, disabledFields = [] }: FinancialInfoFormProps) {
+interface AgentTrackRecord {
+  employee_name: string;
+  team: string;
+  gst_offer: boolean;
+  '90_weightage': boolean;
+}
+
+export function FinancialInfoForm({ data, updateData, paymentMonth, disabledFields = [] }: FinancialInfoFormProps) {
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed' | 'none'>('none');
+  const [agentRecords, setAgentRecords] = useState<AgentTrackRecord[]>([]);
+  const [employeesByTeam, setEmployeesByTeam] = useState<Record<string, string[]>>({});
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
+
+  const currentPaymentMonth = paymentMonth || data.paymentMonth;
+
+  // Fetch employees and their GST / 90% weightage rules based on payment month
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      if (!currentPaymentMonth) {
+        setEmployeesByTeam({});
+        setAgentRecords([]);
+        return;
+      }
+
+      setIsLoadingEmployees(true);
+      try {
+        const { data: records, error } = await supabase
+          .from('monthly_track_aps')
+          .select('employee_name, team, gst_offer, 90_weightage')
+          .eq('month', currentPaymentMonth);
+
+        if (error) throw error;
+
+        const typedRecords = (records || []) as AgentTrackRecord[];
+        setAgentRecords(typedRecords);
+
+        // Group employees by team
+        const grouped: Record<string, string[]> = {};
+        typedRecords.forEach((record) => {
+          const team = record.team || 'Uncategorized';
+          const employee = record.employee_name;
+          if (employee) {
+            if (!grouped[team]) {
+              grouped[team] = [];
+            }
+            if (!grouped[team].includes(employee)) {
+              grouped[team].push(employee);
+            }
+          }
+        });
+
+        setEmployeesByTeam(grouped);
+      } catch (error) {
+        console.error('Error fetching employees for financial info:', error);
+        setEmployeesByTeam({});
+        setAgentRecords([]);
+      } finally {
+        setIsLoadingEmployees(false);
+      }
+    };
+
+    fetchEmployees();
+  }, [currentPaymentMonth]);
+
+  // Handle agent selection and auto-populate team
+  const handleEmployeeChange = (employeeName: string) => {
+    const matched = agentRecords.find((r) => r.employee_name === employeeName);
+    const newTeam = matched?.team || '';
+    updateData({
+      employeeName,
+      team: newTeam,
+    });
+  };
+
+  // Sync team if employeeName was prefilled (e.g. restored session)
+  useEffect(() => {
+    if (!data.employeeName || agentRecords.length === 0) return;
+    const matched = agentRecords.find((r) => r.employee_name === data.employeeName);
+    if (matched && matched.team && matched.team !== data.team) {
+      updateData({ team: matched.team });
+    }
+  }, [data.employeeName, agentRecords, data.team, updateData]);
+
+  // Selected agent's GST Offer & 90% Weightage eligibility
+  const selectedAgent = agentRecords.find((r) => r.employee_name === data.employeeName);
+  const isGstEligible = Boolean(selectedAgent?.gst_offer);
+  const is90WeightageEligible = Boolean(selectedAgent?.['90_weightage']);
 
   const handleChange = (field: keyof FormData, value: string) => {
     updateData({ [field]: value });
@@ -44,7 +134,7 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
   };
 
   // Sync discountType with discountOfferType from data
-  React.useEffect(() => {
+  useEffect(() => {
     if (data.discountOfferType === 'None' || data.discountOfferType === 'none') {
       setDiscountType('none');
     }
@@ -63,22 +153,26 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
     "1 Year", "2 Years", "3 Years"
   ];
 
-  // Auto-calculate net premium from base premium (divide by 1.18)
-  React.useEffect(() => {
+  // Auto-calculate net premium from base premium:
+  // If agent has gst_offer === true -> Base / 1.18 (GST deduction applies)
+  // Else -> Base amount (No GST deduction applies)
+  useEffect(() => {
     if (data.premium) {
       const baseAmount = parseFloat(data.premium) || 0;
-      const netAmount = baseAmount / 1.18;
+      const netAmount = isGstEligible ? baseAmount / 1.18 : baseAmount;
       updateData({ netPremium: netAmount.toFixed(2) });
+    } else {
+      updateData({ netPremium: '' });
     }
-  }, [data.premium]);
+  }, [data.premium, isGstEligible, updateData]);
 
   // Auto-calculate updated premium when discount is applied
-  React.useEffect(() => {
-    if (data.netPremium) {
+  useEffect(() => {
+    if (data.netPremium !== undefined && data.netPremium !== '') {
       const netAmount = parseFloat(data.netPremium) || 0;
       const baseAmount = parseFloat(data.premium) || 0;
 
-      // 1. Apply the date-specific calculation order.
+      // 1. Apply date-specific and 90% weightage rule.
       const [day, month, year] = data.paymentDate.split('/').map(Number);
       const parsedPaymentDate = data.paymentDate.includes('/')
         ? new Date(year, month - 1, day)
@@ -86,9 +180,12 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
       const ninetyPercentRuleStart = new Date(2026, 7, 21);
       const ninetyPercentBeforeDiscountEnd = new Date(2026, 8, 24);
       const tenureRuleEnd = new Date(2026, 8, 8);
+
+      // 90% Rule is ONLY applicable if agent has 90% weightage = true
       const isNinetyPercentRuleApplicable =
-        !data.paymentDate || parsedPaymentDate >= ninetyPercentRuleStart;
+        is90WeightageEligible && (!data.paymentDate || parsedPaymentDate >= ninetyPercentRuleStart);
       const isNinetyPercentAfterDiscount =
+        is90WeightageEligible &&
         data.paymentDate &&
         parsedPaymentDate >= ninetyPercentRuleStart &&
         parsedPaymentDate < ninetyPercentBeforeDiscountEnd;
@@ -133,10 +230,113 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
 
       updateData({ updatedPremium: Math.max(0, currentAmount).toFixed(2) });
     }
-  }, [data.netPremium, data.discountOffer, data.tenure, data.premium, data.paymentDate, discountType, updateData]);
+  }, [data.netPremium, data.discountOffer, data.tenure, data.premium, data.paymentDate, discountType, is90WeightageEligible, updateData]);
 
   return (
     <div className="space-y-6 animate-slide-in" style={{ background: 'transparent' }}>
+      {/* Agent Name & Team Card at Top of Financial Information */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6" style={{ background: 'transparent' }}>
+        <Card className="hover:shadow-card transition-all duration-300" style={{ background: 'transparent', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+          <CardContent className="p-4" style={{ background: 'transparent' }}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                <UserCheck className="w-4 h-4 text-primary" />
+              </div>
+              <Label htmlFor="employeeName" className="text-sm font-medium">
+                Agent / Employee Name *
+              </Label>
+            </div>
+            {isLoadingEmployees ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                Loading agents...
+              </div>
+            ) : currentPaymentMonth ? (
+              <>
+                {Object.keys(employeesByTeam).length > 0 ? (
+                  <Select value={data.employeeName || ''} onValueChange={handleEmployeeChange}>
+                    <SelectTrigger id="employeeName" className="border-border/20 focus:border-primary">
+                      <SelectValue placeholder="Select agent / employee" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(employeesByTeam).map(([team, employees]) => (
+                        <SelectGroup key={team}>
+                          <SelectLabel className="font-semibold text-primary">{team}</SelectLabel>
+                          {employees.map((employee) => (
+                            <SelectItem key={employee} value={employee}>
+                              {employee}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    id="employeeName"
+                    placeholder={`No agents found for ${currentPaymentMonth}`}
+                    value=""
+                    disabled
+                    className="border-border/20 bg-muted/50 cursor-not-allowed"
+                  />
+                )}
+              </>
+            ) : (
+              <Input
+                id="employeeName"
+                placeholder="Select payment date first"
+                value={data.employeeName || ''}
+                disabled
+                className="border-border/20 focus:border-primary transition-colors"
+              />
+            )}
+
+            {/* Agent Eligibility Badges */}
+            {data.employeeName && (
+              <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-border/10 text-xs">
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium ${
+                  isGstEligible
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    : 'bg-muted/40 text-muted-foreground border border-border/30'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isGstEligible ? 'bg-emerald-400' : 'bg-muted-foreground'}`} />
+                  GST Offer: {isGstEligible ? 'Eligible (GST Deducted)' : 'Not Eligible (No GST Off)'}
+                </span>
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium ${
+                  is90WeightageEligible
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    : 'bg-muted/40 text-muted-foreground border border-border/30'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${is90WeightageEligible ? 'bg-emerald-400' : 'bg-muted-foreground'}`} />
+                  90% Weightage: {is90WeightageEligible ? 'Eligible (90% Rule ON)' : 'Not Eligible (90% Rule OFF)'}
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-card transition-all duration-300" style={{ background: 'transparent', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+          <CardContent className="p-4" style={{ background: 'transparent' }}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                <Users className="w-4 h-4 text-primary" />
+              </div>
+              <Label htmlFor="team" className="text-sm font-medium">
+                Team *
+              </Label>
+            </div>
+            <Input
+              id="team"
+              placeholder={data.team || 'Auto-populated based on agent selection'}
+              value={data.team || ''}
+              disabled
+              className="border-border/20 bg-muted/50 cursor-not-allowed"
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Pricing / Premium Details Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6" style={{ background: 'transparent' }}>
         <Card className="hover:shadow-card transition-all duration-300" style={{ background: 'transparent', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
           <CardContent className="p-4" style={{ background: 'transparent' }}>
@@ -168,13 +368,13 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
                 <Calculator className="w-4 h-4 text-success" />
               </div>
               <Label htmlFor="netPremium" className="text-sm font-medium">
-                Net Premium (Auto-calculated)
+                Net Premium (Auto-calculated) {isGstEligible ? '(18% GST Out)' : '(No GST Off)'}
               </Label>
             </div>
             <Input
               id="netPremium"
               type="number"
-              placeholder="Auto-calculated from base premium"
+              placeholder={isGstEligible ? "Auto-calculated (Base ÷ 1.18)" : "Auto-calculated (Equal to Base)"}
               value={data.netPremium}
               readOnly
               className="border-border/20 bg-muted/50 cursor-not-allowed"
@@ -325,8 +525,8 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
       
       {(() => {
         const baseAmount = parseFloat(data.premium) || 0;
-        const netAmount = parseFloat(data.netPremium) || (baseAmount > 0 ? baseAmount / 1.18 : 0);
-        const netDiff = baseAmount > 0 ? baseAmount - netAmount : 0;
+        const netAmount = parseFloat(data.netPremium) || (baseAmount > 0 ? (isGstEligible ? baseAmount / 1.18 : baseAmount) : 0);
+        const netDiff = isGstEligible && baseAmount > 0 ? baseAmount - netAmount : 0;
 
         const [day, month, year] = data.paymentDate.split('/').map(Number);
         const parsedPaymentDate = data.paymentDate.includes('/')
@@ -335,9 +535,12 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
         const ninetyPercentRuleStart = new Date(2026, 7, 21);
         const ninetyPercentBeforeDiscountEnd = new Date(2026, 8, 24);
         const tenureRuleEnd = new Date(2026, 8, 9);
+
+        // 90% Rule is ONLY applied if agent has 90% weightage = true
         const isNinetyPercentRuleApplicable =
-          !data.paymentDate || parsedPaymentDate >= ninetyPercentRuleStart;
+          is90WeightageEligible && (!data.paymentDate || parsedPaymentDate >= ninetyPercentRuleStart);
         const isNinetyPercentAfterDiscount =
+          is90WeightageEligible &&
           data.paymentDate &&
           parsedPaymentDate >= ninetyPercentRuleStart &&
           parsedPaymentDate < ninetyPercentBeforeDiscountEnd;
@@ -419,26 +622,28 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
                   {/* 2. Net Premium */}
                   <TableRow className="border-b border-border/10 hover:bg-muted/10">
                     <TableCell className="py-2 px-3 font-medium">Net Premium</TableCell>
-                    <TableCell className="py-2 px-3 text-muted-foreground">Base ÷ 1.18</TableCell>
+                    <TableCell className="py-2 px-3 text-muted-foreground">
+                      {isGstEligible ? 'Base ÷ 1.18 (GST Deducted)' : 'No GST Deduction (Base = Net)'}
+                    </TableCell>
                     <TableCell className="py-2 px-3 text-right font-mono text-rose-400">
                       {netDiff > 0 ? `-₹${netDiff.toFixed(2)}` : '₹0.00'}
                     </TableCell>
                     <TableCell className="py-2 px-3 text-right font-mono font-medium">₹{netAmount.toFixed(2)}</TableCell>
                   </TableRow>
 
-                  {/* 3. 90% Rule */}
-                  {isNinetyPercentRuleApplicable && !isNinetyPercentAfterDiscount && <TableRow className="border-b border-border/10 hover:bg-muted/10">
-                    <TableCell className="py-2 px-3 font-medium">90% Rule</TableCell>
-                    <TableCell className="py-2 px-3 text-muted-foreground">
-                      {isNinetyPercentRuleApplicable
-                        ? 'Net Premium × 0.9'
-                        : 'Not applicable before 21 Aug 2026'}
-                    </TableCell>
-                    <TableCell className="py-2 px-3 text-right font-mono text-rose-400">
-                      {diff90 > 0 ? `-₹${diff90.toFixed(2)}` : '₹0.00'}
-                    </TableCell>
-                    <TableCell className="py-2 px-3 text-right font-mono font-medium">₹{amountAfter90Rule.toFixed(2)}</TableCell>
-                  </TableRow>}
+                  {/* 3. 90% Rule (Only added if agent has 90% weightage = true) */}
+                  {isNinetyPercentRuleApplicable && !isNinetyPercentAfterDiscount && (
+                    <TableRow className="border-b border-border/10 hover:bg-muted/10">
+                      <TableCell className="py-2 px-3 font-medium">90% Rule</TableCell>
+                      <TableCell className="py-2 px-3 text-muted-foreground">
+                        Net Premium × 0.9 (90% Weightage Active)
+                      </TableCell>
+                      <TableCell className="py-2 px-3 text-right font-mono text-rose-400">
+                        {diff90 > 0 ? `-₹${diff90.toFixed(2)}` : '₹0.00'}
+                      </TableCell>
+                      <TableCell className="py-2 px-3 text-right font-mono font-medium">₹{amountAfter90Rule.toFixed(2)}</TableCell>
+                    </TableRow>
+                  )}
 
                   {/* 4. Tenure Rate */}
                   <TableRow className="border-b border-border/10 hover:bg-muted/10">
@@ -460,14 +665,17 @@ export function FinancialInfoForm({ data, updateData, disabledFields = [] }: Fin
                     <TableCell className="py-2 px-3 text-right font-mono font-medium">₹{amountAfterDiscount.toFixed(2)}</TableCell>
                   </TableRow>
 
-                  {isNinetyPercentAfterDiscount && <TableRow className="border-b border-border/10 hover:bg-muted/10">
-                    <TableCell className="py-2 px-3 font-medium">90% Rule</TableCell>
-                    <TableCell className="py-2 px-3 text-muted-foreground">After discount × 0.9</TableCell>
-                    <TableCell className="py-2 px-3 text-right font-mono text-rose-400">
-                      {diff90 > 0 ? `-₹${diff90.toFixed(2)}` : '₹0.00'}
-                    </TableCell>
-                    <TableCell className="py-2 px-3 text-right font-mono font-medium">₹{amountAfter90Rule.toFixed(2)}</TableCell>
-                  </TableRow>}
+                  {/* 90% Rule if applied after discount */}
+                  {isNinetyPercentAfterDiscount && (
+                    <TableRow className="border-b border-border/10 hover:bg-muted/10">
+                      <TableCell className="py-2 px-3 font-medium">90% Rule</TableCell>
+                      <TableCell className="py-2 px-3 text-muted-foreground">After discount × 0.9 (90% Weightage Active)</TableCell>
+                      <TableCell className="py-2 px-3 text-right font-mono text-rose-400">
+                        {diff90 > 0 ? `-₹${diff90.toFixed(2)}` : '₹0.00'}
+                      </TableCell>
+                      <TableCell className="py-2 px-3 text-right font-mono font-medium">₹{amountAfter90Rule.toFixed(2)}</TableCell>
+                    </TableRow>
+                  )}
 
                   {/* Final Row */}
                   <TableRow className="bg-info/10 font-bold border-t border-info/30">

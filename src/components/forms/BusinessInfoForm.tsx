@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Building, Users, UserCheck, Briefcase, HeartHandshake, Upload, Hash, Loader2, Edit, X, Link } from 'lucide-react';
+import { Building, Users, Briefcase, HeartHandshake, Upload, Hash, Loader2, Edit, X, Link } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface FormData {
@@ -33,9 +33,7 @@ interface BusinessInfoFormProps {
 
 export function BusinessInfoForm({ data, updateData, paymentMonth, insuranceCompany, disabledFields = [] }: BusinessInfoFormProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [employeesByTeam, setEmployeesByTeam] = useState<Record<string, string[]>>({});
   const [availableTeams, setAvailableTeams] = useState<string[]>([]);
-  const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [isLoadingTeams, setIsLoadingTeams] = useState(false);
   const [teamDisplayMode, setTeamDisplayMode] = useState<'input' | 'dropdown'>('input');
   const [insuranceCompanies, setInsuranceCompanies] = useState<string[]>([]);
@@ -186,54 +184,6 @@ export function BusinessInfoForm({ data, updateData, paymentMonth, insuranceComp
     }
   };
 
-  // Fetch employees based on payment month
-  useEffect(() => {
-    const fetchEmployees = async () => {
-      if (!paymentMonth) {
-        setEmployeesByTeam({});
-        return;
-      }
-
-      setIsLoadingEmployees(true);
-      try {
-        console.log('Fetching employees for month:', paymentMonth);
-        const { data: records, error } = await supabase
-          .from('monthly_track_aps')
-          .select('employee_name, team')
-          .eq('month', paymentMonth);
-
-        if (error) throw error;
-
-        console.log('Employee records:', records);
-
-        // Group employees by team
-        const grouped: Record<string, string[]> = {};
-        records?.forEach((record: any) => {
-          const team = record.team || 'Uncategorized';
-          const employee = record.employee_name;
-          if (employee) {
-            if (!grouped[team]) {
-              grouped[team] = [];
-            }
-            if (!grouped[team].includes(employee)) {
-              grouped[team].push(employee);
-            }
-          }
-        });
-
-        setEmployeesByTeam(grouped);
-        console.log('Employees grouped by team:', grouped);
-      } catch (error) {
-        console.error('Error fetching employees:', error);
-        setEmployeesByTeam({});
-      } finally {
-        setIsLoadingEmployees(false);
-      }
-    };
-
-    fetchEmployees();
-  }, [paymentMonth]);
-
   // Fetch insurance companies from database
   useEffect(() => {
     const fetchInsuranceCompanies = async () => {
@@ -369,22 +319,6 @@ export function BusinessInfoForm({ data, updateData, paymentMonth, insuranceComp
     };
   }, []);
 
-  // Auto-set team when employee is selected
-  useEffect(() => {
-    if (!data.employeeName || Object.keys(employeesByTeam).length === 0) {
-      return;
-    }
-
-    // Find the team for the selected employee
-    for (const [team, employees] of Object.entries(employeesByTeam)) {
-      if (employees.includes(data.employeeName)) {
-        console.log(`Employee ${data.employeeName} belongs to team: ${team}`);
-        updateData({ team });
-        break;
-      }
-    }
-  }, [data.employeeName, employeesByTeam, updateData]);
-
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -440,82 +374,6 @@ export function BusinessInfoForm({ data, updateData, paymentMonth, insuranceComp
   return (
     <div className="space-y-6 animate-slide-in" style={{ background: 'transparent' }}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6" style={{ background: 'transparent' }}>
-        <Card className="hover:shadow-card transition-all duration-300" style={{ background: 'transparent', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-          <CardContent className="p-4" style={{ background: 'transparent' }}>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                <UserCheck className="w-4 h-4 text-primary" />
-              </div>
-              <Label htmlFor="employeeName" className="text-sm font-medium">
-                Employee Name *
-              </Label>
-            </div>
-            {isLoadingEmployees ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Loading employees...
-              </div>
-            ) : paymentMonth ? (
-              <>
-                {Object.keys(employeesByTeam).length > 0 ? (
-                  <Select value={data.employeeName} onValueChange={(value) => handleChange('employeeName', value)}>
-                    <SelectTrigger className="border-border/20 focus:border-primary">
-                      <SelectValue placeholder="Select employee" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(employeesByTeam).map(([team, employees]) => (
-                        <SelectGroup key={team}>
-                          <SelectLabel className="font-semibold text-primary">{team}</SelectLabel>
-                          {employees.map((employee) => (
-                            <SelectItem key={employee} value={employee}>
-                              {employee}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    id="employeeName"
-                    placeholder={`No employees found for ${paymentMonth}`}
-                    value=""
-                    disabled
-                    className="border-border/20 bg-muted/50 cursor-not-allowed"
-                  />
-                )}
-              </>
-            ) : (
-              <Input
-                id="employeeName"
-                placeholder="Select payment date first"
-                value={data.employeeName}
-                disabled
-                className="border-border/20 focus:border-primary transition-colors"
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-card transition-all duration-300" style={{ background: 'transparent', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-          <CardContent className="p-4" style={{ background: 'transparent' }}>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                <Users className="w-4 h-4 text-primary" />
-              </div>
-              <Label htmlFor="team" className="text-sm font-medium">
-                Team *
-              </Label>
-            </div>
-            <Input
-              id="team"
-              placeholder={data.team || 'Auto-populated based on employee selection'}
-              value={data.team}
-              disabled
-              className="border-border/20 bg-muted/50 cursor-not-allowed"
-            />
-          </CardContent>
-        </Card>
 
         <Card className="hover:shadow-card transition-all duration-300" style={{ background: 'transparent', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
           <CardContent className="p-4" style={{ background: 'transparent' }}>

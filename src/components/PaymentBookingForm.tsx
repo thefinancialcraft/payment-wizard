@@ -1008,7 +1008,7 @@ export function PaymentBookingForm({ locationState }: PaymentBookingFormProps) {
       case 3:
         return <InsuranceDetailsForm data={formData} updateData={updateFormData} disabledFields={disabledFields} />;
       case 4:
-        return <FinancialInfoForm data={{ ...formData, paymentDate: formData.paymentDate }} updateData={updateFormData} disabledFields={disabledFields} />;
+        return <FinancialInfoForm data={formData} updateData={updateFormData} paymentMonth={formData.paymentMonth} disabledFields={disabledFields} />;
       case 5:
         return <BusinessInfoForm data={formData} updateData={updateFormData} paymentMonth={formData.paymentMonth} insuranceCompany={formData.insuranceCompany} disabledFields={disabledFields} />;
       default:

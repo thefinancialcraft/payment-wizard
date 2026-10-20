@@ -1,216 +1,275 @@
-// Google Apps Script for syncing Supabase bookings to Google Sheets
-// Deploy this as a web app with "Who has access: Anyone"
+function updateMonthlyTrackIds() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Monthly_track");
 
-function normalizeHeader(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[\s-]+/g, '_')
-    .replace(/[^a-z0-9_]/g, '')
-    .replace(/_+/g, '_');
+  if (!sheet) {
+    throw new Error("Monthly_track sheet nahi mili.");
+  }
+
+  const lastRow = sheet.getLastRow();
+
+  if (lastRow < 1) return;
+
+  // Column A aur B ka data
+  const rangeA = sheet.getRange(1, 1, lastRow, 1);
+  const rangeB = sheet.getRange(1, 2, lastRow, 1);
+
+  const valuesA = rangeA.getValues();
+  const valuesB = rangeB.getValues();
+
+  for (let i = 0; i < lastRow; i++) {
+
+    const aValue = valuesA[i][0];
+    const bValue = valuesB[i][0];
+
+    // Agar B blank hai
+    if (bValue === "" || bValue === null) {
+      valuesA[i][0] = "";
+
+    } 
+    // Agar B filled hai aur A blank hai
+    else if (aValue === "" || aValue === null) {
+      valuesA[i][0] = generateRandomId(10);
+    }
+  }
+
+  // Updated Column A
+  rangeA.setValues(valuesA);
 }
 
-function buildLookup(data) {
-  const lookup = {};
 
-  if (Array.isArray(data)) {
-    data.forEach((field) => {
-      if (field && typeof field === 'object' && field.header !== undefined) {
-        lookup[normalizeHeader(field.header)] = field.value;
+function generateRandomId(length) {
+  const characters =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+  let result = "";
+
+  for (let i = 0; i < length; i++) {
+    result += characters.charAt(
+      Math.floor(Math.random() * characters.length)
+    );
+  }
+
+  return result;
+}
+
+
+
+const SUPABASE_URL = 'https://qfbeskgvxjwqccaraulv.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmYmVza2d2eGp3cWNjYXJhdWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2MjQwMTQsImV4cCI6MjA5NzIwMDAxNH0.IPCGYN-v7UkRDygrvcGyZC-3uxjFoiSy7lTUoVe_l9M'; 
+const SHEET_ID = '1qzxbyavzNWD9x-hG5y6cNFZlMEMyubOR-JAN5-spWiA';
+const SHEET_NAME = 'Monthly_track';
+const TABLE_NAME = 'monthly_track_aps'; 
+// These configuration values must be defined in the Apps Script project:
+// SHEET_ID, SHEET_NAME, SUPABASE_URL, SUPABASE_KEY, and TABLE_NAME.
+
+const COLUMN_MAPPING = {
+  'Ref_id': 'ref_id',
+  'Month Start': 'month_start',
+  'End Date': 'end_date',
+  'Month': 'month',
+  'Year': 'year',
+  'Employee Name': 'employee_name',
+  'Joined Date': 'joined_date',
+  'Salary': 'salary',
+  'Team': 'team',
+  'Target': 'target',
+  'Justification': 'justification',
+  '50 Below Above': 'fifty_below_above',
+  '50k Above': 'fifty_k_above',
+  '1lac Above': 'one_lac_above',
+  'Single Yr Nop': 'single_yr_nop',
+  'Multi Yr Nop': 'multi_yr_nop',
+  'N.o.p': 'nop',
+  'Logged Nop':'logged_nop',
+  'Logged Gross score': 'logged_gross_score',
+  'Logged Score': 'logged_score',
+  'Gross score': 'gross_score',
+  'Score': 'score',
+  'Just left': 'just_left',
+  'Issued': 'issued',
+  'Issued nop': 'issued_nop',
+  'Pending': 'pending',
+  'Pen. Nop': 'pending_nop',
+  'Requirement': 'requirement',
+  'Req. Nop': 'requirement_nop',
+  'Counter': 'counter',
+  'Cou. Nop': 'counter_nop',
+  'Declined': 'declined',
+  'Dec. Nop': 'declined_nop',
+  'Mismatched Nop': 'mismatched_nop',
+  'Achievement': 'achievement',
+  'Discount Deliverd': 'discount_deliverd',
+  'Discount Count': 'discount_count',
+  'Last Payment': 'last_payment',
+  'Last Payment Amount': 'last_payment_amount',
+  'Last Pay Days': 'last_pay_days',
+  'Gst Offer': 'gst_offer',
+  '90_Weightage': '90_weightage',
+  '90 Weightage': '90_weightage'
+}
+
+const DATE_COLUMNS = ['month_start', 'end_date', 'joined_date', 'last_payment']
+const NUMERIC_COLUMNS = [
+  'year', 'salary', 'target', 'fifty_below_above', 'fifty_k_above', 'one_lac_above',
+  'single_yr_nop', 'multi_yr_nop', 'nop','logged_nop', 'logged_gross_score', 'logged_score',
+  'gross_score', 'score', 'issued', 'issued_nop', 'pending', 'pending_nop',
+  'requirement', 'requirement_nop', 'counter', 'counter_nop', 'declined',
+  'declined_nop', 'mismatched', 'mismatched_nop', 'achievement', 'discount_deliverd',
+  'discount_count', 'last_payment_amount', 'last_pay_days'
+]
+const TEXT_NUMERIC_COLUMNS = ['justification', 'just_left']
+const BOOLEAN_COLUMNS = ['gst_offer', '90_weightage']
+
+function sendDataToSupabase() {
+  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHEET_NAME)
+  if (!sheet) {
+    Logger.log("ERROR: Sheet '" + SHEET_NAME + "' not found!")
+    return
+  }
+
+  const values = sheet.getDataRange().getValues()
+  if (values.length <= 1) {
+    Logger.log('No data found to process.')
+    return
+  }
+
+  const headers = values[0].map(function(header) {
+    return String(header).replace(/\s+/g, ' ').trim()
+  })
+  if (headers.indexOf('Ref_id') === -1) {
+    Logger.log("ERROR: 'Ref_id' column not found in headers.")
+    return
+  }
+
+  const payloadData = []
+  const scriptTimeZone = Session.getScriptTimeZone()
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i]
+    const rowObject = {}
+    let refId = null
+    let mismatchedOccurrence = 0
+
+    for (let j = 0; j < headers.length; j++) {
+      const sheetColumn = headers[j]
+      let dbColumn = COLUMN_MAPPING[sheetColumn]
+
+      if (sheetColumn === 'Mismatched') {
+        dbColumn = mismatchedOccurrence === 0 ? 'mismatched' : 'mismatched_nop'
+        mismatchedOccurrence++
       }
-    });
-  } else {
-    const source = data && typeof data === 'object' ? data : {};
-    Object.keys(source).forEach((key) => {
-      lookup[normalizeHeader(key)] = source[key];
-    });
-  }
+      if (!dbColumn) continue
 
-  if (lookup.payement_mode !== undefined && lookup.payment_mode === undefined) {
-    lookup.payment_mode = lookup.payement_mode;
-  }
-  if (lookup.payment_mode !== undefined && lookup.payement_mode === undefined) {
-    lookup.payement_mode = lookup.payment_mode;
-  }
+      let value = row[j]
+      if (value instanceof Date) {
+        value = Utilities.formatDate(value, scriptTimeZone, 'yyyy-MM-dd')
+      }
+      if (typeof value === 'string') value = value.trim()
+      if (value === '' || value === undefined || value === null) value = null
 
-  return lookup;
-}
+      if (value !== null && DATE_COLUMNS.indexOf(dbColumn) !== -1) {
+        value = cleanDateValue(value, scriptTimeZone)
+      } else if (value !== null && (NUMERIC_COLUMNS.indexOf(dbColumn) !== -1 || TEXT_NUMERIC_COLUMNS.indexOf(dbColumn) !== -1)) {
+        const numericValue = cleanNumericValue(value)
+        value = numericValue === null
+          ? null
+          : TEXT_NUMERIC_COLUMNS.indexOf(dbColumn) !== -1
+            ? String(numericValue)
+            : numericValue
+      } else if (BOOLEAN_COLUMNS.indexOf(dbColumn) !== -1) {
+        value = cleanBooleanValue(value)
+      }
 
-function resolveField(dataLookup, headerName) {
-  const normalized = normalizeHeader(headerName);
-  const aliasMap = {
-    booking_id: ['booking_id', 'booking_code'],
-    policy_holder_name: ['policy_holder_name', 'policyholder_name', 'policyholdername'],
-    contact_no: ['contact_no', 'contactnumber', 'mobile_no', 'mobile'],
-    email: ['email'],
-    number_of_members: ['number_of_members', 'no_of_members', 'members'],
-    pincode: ['pincode'],
-    city: ['city'],
-    district: ['district'],
-    state: ['state'],
-    country: ['country'],
-    payment_date: ['payment_date'],
-    payment_month: ['payment_month'],
-    effective_date: ['effective_date'],
-    next_renewal_date: ['next_renewal_date'],
-    month: ['month'],
-    insurance_company: ['insurance_company'],
-    plan_name: ['plan_name'],
-    policy_type: ['policy_type'],
-    health_checkup: ['health_checkup'],
-    extra_bonus: ['extra_bonus'],
-    tenure: ['tenure'],
-    premium: ['premium'],
-    net_premium: ['net_premium'],
-    discount_offer: ['discount_offer'],
-    discount_offer_type: ['discount_offer_type'],
-    updated_premium: ['updated_premium'],
-    employee_name: ['employee_name'],
-    team: ['team'],
-    previous_company: ['previous_company'],
-    business_type: ['business_type'],
-    payement_mode: ['payement_mode', 'payment_mode'],
-    payment_mode: ['payment_mode', 'payement_mode'],
-    assistant_team: ['assistant_team'],
-    relationship_manager: ['relationship_manager'],
-    agent_code: ['agent_code'],
-    proposal_no: ['proposal_no'],
-    grade: ['grade'],
-    lead_source: ['lead_source'],
-    payment_proof: ['payment_proof'],
-    created_at: ['created_at'],
-    sync: ['sync']
-  };
-
-  const candidates = aliasMap[normalized] || [normalized];
-  for (const candidate of candidates) {
-    if (dataLookup[candidate] !== undefined) {
-      return dataLookup[candidate];
+      if (dbColumn === 'ref_id' && value !== null) refId = String(value)
+      rowObject[dbColumn] = value
     }
+
+    if (refId !== null) payloadData.push(rowObject)
   }
 
-  return '';
-}
-
-function formatDateAsText(value) {
-  if (!value) return '';
-
-  const text = String(value).trim();
-  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (isoMatch) {
-    return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+  if (payloadData.length === 0) {
+    Logger.log('No valid rows found with a Ref_id.')
+    return
   }
 
-  const slashMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (slashMatch) {
-    return `${slashMatch[1].padStart(2, '0')}/${slashMatch[2].padStart(2, '0')}/${slashMatch[3]}`;
-  }
+  Logger.log('Total valid rows to sync: ' + payloadData.length)
+  const batchSize = 500
 
-  return text;
-}
-
-function findRowIndexByBookingId(sheet, bookingId) {
-  const values = sheet.getDataRange().getValues();
-
-  for (let rowIndex = 1; rowIndex < values.length; rowIndex++) {
-    const row = values[rowIndex];
-    const cellValue = row[0];
-    if (String(cellValue || '').trim() === String(bookingId || '').trim()) {
-      return rowIndex + 1;
+  for (let start = 0; start < payloadData.length; start += batchSize) {
+    const batch = payloadData.slice(start, start + batchSize)
+    const options = {
+      method: 'post',
+      contentType: 'application/json',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: 'Bearer ' + SUPABASE_KEY,
+        Prefer: 'resolution=merge-duplicates,return=minimal'
+      },
+      payload: JSON.stringify(batch),
+      muteHttpExceptions: true
     }
-  }
-
-  return null;
-}
-
-function doPost(e) {
-  try {
-    const rawBody = e && e.postData && e.postData.contents ? e.postData.contents : '{}';
-    let payload = {};
 
     try {
-      payload = JSON.parse(rawBody);
-    } catch (_) {
-      const match = String(rawBody).match(/^data=(.*)$/);
-      if (match && match[1]) {
-        payload = JSON.parse(decodeURIComponent(match[1]));
+      const response = UrlFetchApp.fetch(
+        SUPABASE_URL + '/rest/v1/' + TABLE_NAME + '?on_conflict=ref_id',
+        options
+      )
+      const code = response.getResponseCode()
+      const batchEnd = Math.min(start + batchSize, payloadData.length)
+
+      if (code >= 200 && code < 300) {
+        Logger.log('SUCCESS: Synced rows ' + (start + 1) + ' to ' + batchEnd + '.')
+      } else {
+        Logger.log('SYNC FAILED for rows ' + (start + 1) + ' to ' + batchEnd + '.')
+        Logger.log('HTTP Code: ' + code + ' | Error Response: ' + response.getContentText())
       }
+    } catch (error) {
+      Logger.log('ERROR on request: ' + error.toString())
     }
-
-    const data = payload && Array.isArray(payload.fields)
-      ? payload.fields
-      : Array.isArray(payload) ? (payload[0] || {}) : payload;
-
-    const spreadsheetId = '1qzxbyavzNWD9x-hG5y6cNFZlMEMyubOR-JAN5-spWiA';
-    const sheetName = 'supabase_response';
-    const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
-    const sheet = spreadsheet.getSheetByName(sheetName);
-
-    if (!sheet) {
-      return ContentService.createTextOutput(JSON.stringify({
-        success: false,
-        error: 'Sheet not found: ' + sheetName
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    const defaultHeaders = [
-      'booking_id', 'policy_holder_name', 'contact_no', 'email', 'number_of_members', 'pincode', 'city', 'district', 'state', 'country',
-      'payment_date', 'payment_month', 'effective_date', 'next_renewal_date', 'month', 'insurance_company', 'plan_name', 'policy_type',
-      'health_checkup', 'extra_bonus', 'tenure', 'premium', 'net_premium', 'discount_offer', 'discount_offer_type', 'updated_premium',
-      'employee_name', 'team', 'previous_company', 'business_type', 'payement_mode', 'assistant_team', 'relationship_manager', 'agent_code',
-      'proposal_no', 'grade', 'lead_source', 'payment_proof', 'created_at', 'sync'
-    ];
-
-    const headerRange = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), defaultHeaders.length));
-    const sheetHeaders = headerRange.getValues()[0] || [];
-    const headers = sheetHeaders.some((header) => String(header || '').trim())
-      ? sheetHeaders.map((header) => String(header || '').trim())
-      : defaultHeaders;
-
-    const dataLookup = buildLookup(data);
-    const rowData = headers.map((header) => {
-      const value = resolveField(dataLookup, header);
-      const normalized = normalizeHeader(header);
-
-      if (['payment_date', 'effective_date', 'next_renewal_date', 'created_at'].includes(normalized)) {
-        return formatDateAsText(value);
-      }
-
-      return value === undefined || value === null ? '' : value;
-    });
-
-    const bookingId = String(resolveField(dataLookup, 'booking_id') || '').trim();
-    const existingRowIndex = bookingId ? findRowIndexByBookingId(sheet, bookingId) : null;
-    const targetRowIndex = existingRowIndex || sheet.getLastRow() + 1;
-
-    headers.forEach((header, index) => {
-      const normalized = normalizeHeader(header);
-      if (['payment_date', 'effective_date', 'next_renewal_date', 'created_at'].includes(normalized)) {
-        sheet.getRange(targetRowIndex, index + 1).setNumberFormat('@');
-      }
-    });
-
-    sheet.getRange(targetRowIndex, 1, 1, rowData.length).setValues([rowData]);
-    sheet.autoResizeColumns(1, rowData.length);
-
-    return ContentService.createTextOutput(JSON.stringify({
-      success: true,
-      message: existingRowIndex ? 'Row updated successfully' : 'Row added successfully',
-      row: targetRowIndex,
-      headers: headers
-    })).setMimeType(ContentService.MimeType.JSON);
-
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({
-      success: false,
-      error: error && error.toString ? error.toString() : String(error)
-    })).setMimeType(ContentService.MimeType.JSON);
   }
+
+  Logger.log('Sync process completed.')
 }
 
-function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({
-    message: 'Supabase to Google Sheets Sync is running',
-    timestamp: new Date().toISOString()
-  })).setMimeType(ContentService.MimeType.JSON);
+function cleanNumericValue(value) {
+  const normalized = String(value).trim().toLowerCase()
+  if (!normalized || normalized.includes('zero')) return null
+
+  const cleaned = normalized.replace(/[^0-9.-]+/g, '')
+  if (!cleaned || cleaned === '-' || cleaned === '.' || cleaned === '-.') return null
+
+  const number = Number(cleaned)
+  return Number.isFinite(number) ? number : null
+}
+
+function cleanDateValue(value, timeZone) {
+  const text = String(value).trim()
+  if (text.toLowerCase().includes('zero')) return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text
+
+  const dayFirstMatch = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
+  if (dayFirstMatch) {
+    const day = dayFirstMatch[1].padStart(2, '0')
+    const month = dayFirstMatch[2].padStart(2, '0')
+    const year = dayFirstMatch[3]
+    const parsed = new Date(Number(year), Number(month) - 1, Number(day))
+    if (parsed.getFullYear() !== Number(year) || parsed.getMonth() !== Number(month) - 1 || parsed.getDate() !== Number(day)) {
+      return null
+    }
+    return year + '-' + month + '-' + day
+  }
+
+  const parsed = new Date(text)
+  if (isNaN(parsed.getTime())) return null
+  return Utilities.formatDate(parsed, timeZone, 'yyyy-MM-dd')
+}
+
+function cleanBooleanValue(value) {
+  if (value === null || value === undefined || value === '') return false
+  if (typeof value === 'boolean') return value
+  const str = String(value).trim().toLowerCase()
+  if (str === 'true' || str === 'yes' || str === 'y' || str === '1') return true
+  if (str === 'false' || str === 'no' || str === 'n' || str === '0') return false
+  return false
 }
