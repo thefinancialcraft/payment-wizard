@@ -650,6 +650,8 @@ export function BusinessInfoForm({ data, updateData, paymentMonth, insuranceComp
                 <SelectItem value="SVTA">SVTA</SelectItem>
                 <SelectItem value="AG">AG</SelectItem>
                 <SelectItem value="AJ">AJ</SelectItem>
+                <SelectItem value="AYS">AYS</SelectItem>
+                <SelectItem value="SYD">SYD</SelectItem>
               </SelectContent>
             </Select>
           </CardContent>
