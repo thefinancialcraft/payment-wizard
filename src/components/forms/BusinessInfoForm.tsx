@@ -368,7 +368,7 @@ export function BusinessInfoForm({ data, updateData, paymentMonth, insuranceComp
   const teams = [
     "None",
     "Saloni Soni",
-    "Tanya Bhardwaj"
+    "Tanya Bhardwaj",
     "Raj Kumar"
   ];
 
