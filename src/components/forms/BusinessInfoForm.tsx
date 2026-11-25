@@ -369,6 +369,7 @@ export function BusinessInfoForm({ data, updateData, paymentMonth, insuranceComp
     "None",
     "Saloni Soni",
     "Tanya Bhardwaj"
+    "Raj Kumar"
   ];
 
   return (
